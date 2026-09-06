@@ -1,0 +1,54 @@
+# --- Build & Install Artifacts ---
+build/
+install/
+log/
+*.egg-info/
+*.pyc
+__pycache__/
+*.pytest_cache/
+
+# --- Editor / OS files ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# --- Python virtual environments ---
+.venv/
+venv/
+env/
+
+# --- Model data (weights, Vosk model dirs, graphs) ---
+# Everything placed under models/ is treated as runtime-fetched data and is
+# NOT committed (Vosk model folders, .pt/.pth/.onnx/.tflite weights, etc.).
+# A placeholder keeps the directory itself trackable.
+models/*
+!models/.gitkeep
+
+# Model weight files anywhere in the repo.
+*.pt
+*.pth
+*.onnx
+*.tflite
+*.pb
+*.zip
+
+# --- Audio / recorded data ---
+*.wav
+*.mp3
+*.flac
+*.pcm
+
+# --- ROS log artifacts ---
+*.ros
+rosbag2_*/
+
+# --- Environment / secrets ---
+.env
+*.env.local
+
+# --- Colcon / ament artifacts ---
+.cache/
+colcon_ws_*/

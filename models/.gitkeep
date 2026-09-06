@@ -1,0 +1,3 @@
+# Placeholder to keep the empty models/ directory trackable in Git.
+# Runtime-fetched model data (Vosk speech models, MediaPipe FaceMesh graphs,
+# YOLO weights) is placed here and is intentionally ignored by .gitignore.

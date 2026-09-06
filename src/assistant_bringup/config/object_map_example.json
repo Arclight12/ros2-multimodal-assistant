@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "mock": true,
+    "calibrated": false,
+    "source": "example_data",
+    "units": "cm",
+    "coordinate_frame": "workspace_base",
+    "note": "Example/sample coordinates for skeleton development only. NOT calibrated to any real workspace. A calibrated scan must replace this before any real motion."
+  },
+  "objects": {
+    "cup": {
+      "x": 12.0,
+      "y": 8.0,
+      "z": 5.0
+    },
+    "eraser": {
+      "x": 5.0,
+      "y": 14.0,
+      "z": 5.0
+    },
+    "sharpener": {
+      "x": 8.0,
+      "y": 3.5,
+      "z": 5.0
+    },
+    "medicine_box": {
+      "x": 18.0,
+      "y": 11.0,
+      "z": 5.0
+    },
+    "phone": {
+      "x": 22.0,
+      "y": 6.0,
+      "z": 5.0
+    }
+  }
+}

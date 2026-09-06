@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    name: Python Linting (Flake8)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install linters
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install flake8
+
+      - name: Lint Python packages
+        run: |
+          flake8 src/assistant_perception/assistant_perception
+          flake8 src/assistant_interaction/assistant_interaction
+          flake8 src/assistant_motion/assistant_motion
+
+  build:
+    name: ROS 2 Jazzy Build Validation
+    runs-on: ubuntu-24.04
+    container:
+      image: ros:jazzy-ros-base
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install build tools
+        run: |
+          apt-get update
+          apt-get install -y python3-colcon-common-extensions python3-rosdep
+
+      - name: Initialize rosdep
+        run: |
+          rosdep init || true
+          rosdep update
+
+      - name: Install dependencies
+        working-directory: ${{ github.workspace }}
+        run: |
+          rosdep install --from-paths src --ignore-src -r -y
+
+      - name: Build workspace
+        working-directory: ${{ github.workspace }}
+        run: |
+          colcon build --event-handlers console_direct+
+
+      - name: Verify launch file syntax
+        run: |
+          python3 -m py_compile \
+            src/assistant_bringup/launch/system.launch.py
+
+  repo-checks:
+    name: Repository Checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate YAML config
+        run: |
+          python3 -c "import yaml,sys; yaml.safe_load(open('src/assistant_bringup/config/system.yaml')); print('system.yaml OK')"
+
+      - name: Validate object map JSON
+        run: |
+          python3 -c "import json; json.load(open('src/assistant_bringup/config/object_map_example.json')); print('object_map_example.json OK')"
+
+      - name: Validate interface files exist
+        run: |
+          test -f src/assistant_msgs/msg/ObjectSelection.msg
+          test -f src/assistant_msgs/srv/ScanWorkspace.srv
+          test -f src/assistant_msgs/action/ExecuteGrasp.action
+          echo "Interfaces present."
+
+      - name: Validate package.xml files
+        run: |
+          for f in src/*/package.xml; do python3 -c "import sys; from xml.etree import ElementTree as ET; ET.parse('$f'); print('$f OK')"; done

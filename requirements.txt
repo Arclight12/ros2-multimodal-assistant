@@ -1,0 +1,28 @@
+# Python dependencies for the multimodal robotic assistant.
+#
+# IMPORTANT: The ROS 2 skeleton does NOT import any package listed here.
+# Everything below is required only for future integration (YOLO / ArUco /
+# MediaPipe / Vosk / Arduino). The current skeleton needs only `rclpy`, which
+# ships with ROS 2, plus the workspace packages themselves.
+
+# --- Perception (future: ArUco workspace mapping, YOLOv8n detection) ---
+numpy
+opencv-contrib-python
+# NOTE: `opencv-python` is intentionally NOT listed. `opencv-contrib-python`
+# is a superset that also provides the ArUco modules; installing both wheels
+# is redundant and can conflict.
+
+# --- Interaction: gaze (future: MediaPipe FaceMesh) ---
+mediapipe
+
+# --- Interaction: voice (future: Vosk offline speech recognition) ---
+vosk
+
+# --- Perception (future: YOLOv8n via Ultralytics) ---
+ultralytics
+
+# --- Motion: serial communication with Arduino (future) ---
+pyserial
+
+# --- YAML configuration parsing ---
+pyyaml

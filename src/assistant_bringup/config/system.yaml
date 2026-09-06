@@ -1,0 +1,12 @@
+/**:
+  ros__parameters:
+    camera_url: "http://192.168.1.100:8080/video"
+    object_map_path: "~/.ros/ros2_multimodal_assistant/object_map.json"
+    serial_port: "/dev/ttyACM0"
+    baudrate: 115200
+    workspace_width: 40.0
+    workspace_height: 30.0
+    default_object_height: 5.0
+    mock_mode: true
+    moveit_enabled: false
+    debug_mode: false

@@ -1,0 +1,17 @@
+# Goal: object identifier to grasp, e.g. "cup".
+
+# Identifier of the object to grasp, matching an entry in object_map.json.
+string object_id
+---
+# Result: outcome of the grasp execution.
+
+# True if the grasp was executed successfully.
+bool success
+
+# Human-readable message describing the outcome or failure reason.
+string message
+---
+# Feedback: state of the ongoing grasp.
+
+# Current step/state of execution, e.g. "planning", "moving", "grasping".
+string current_state

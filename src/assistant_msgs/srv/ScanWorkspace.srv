@@ -1,0 +1,9 @@
+# Request to initiate a fresh scan of the tabletop workspace.
+# Set to true to start the scan; set to false to request a status check.
+bool start_scan
+---
+# Indicates whether the scan request was accepted and completed.
+bool success
+
+# Human-readable status/error message describing the outcome.
+string message

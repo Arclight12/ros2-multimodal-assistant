@@ -1,0 +1,17 @@
+[flake8]
+max-line-length = 100
+extend-ignore =
+    # Docstring style checks are covered by ament_pep257 at test time;
+    # keep the dev loop focused on real code errors.
+    D100,
+    D101,
+    D102,
+    D103,
+    D104,
+    D105,
+    D107,
+    # Import ordering/grouping is handled by isort separately from bugs.
+    I100,
+    I101,
+    # Single-vs-double quote preference (Q plugin) is stylistic only.
+    Q000,
