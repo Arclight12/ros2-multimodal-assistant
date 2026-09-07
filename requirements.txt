@@ -26,3 +26,6 @@ pyserial
 
 # --- YAML configuration parsing ---
 pyyaml
+
+# --- Training only (not imported by ROS runtime nodes) ---
+torch

@@ -42,7 +42,9 @@ class CalibrationNode(Node):
         self.declare_parameter("aruco_dictionary", "DICT_4X4_50")
         self.declare_parameter("marker_ids", [0, 1, 2, 3])
         self.declare_parameter("mock_mode", True)
-        self._path = os.path.expanduser(str(self.get_parameter("calibration_path").value))
+        self._path = os.path.expanduser(
+            str(self.get_parameter("calibration_path").value)
+        )
         self._width = float(self.get_parameter("workspace_width_m").value)
         self._height = float(self.get_parameter("workspace_height_m").value)
         self._table_z = float(self.get_parameter("table_z_m").value)
@@ -82,16 +84,25 @@ class CalibrationNode(Node):
     ) -> CalibrateWorkspace.Response:
         """Run one marker capture and persist only a fully valid calibration."""
         if not request.start_calibration:
-            return self._refuse(response, "No calibration requested (start_calibration=False).")
+            return self._refuse(
+                response,
+                "No calibration requested (start_calibration=False).",
+            )
         if self._mock_mode:
             response.success = True
             response.calibrated = False
-            response.message = "Mock calibration is intentionally not valid for motion."
+            response.message = (
+                "Mock calibration is intentionally not valid for motion."
+            )
             return response
         if not self._transform_configured:
-            return self._refuse(response, "workspace-to-base transform is not configured")
+            return self._refuse(
+                response, "workspace-to-base transform is not configured"
+            )
         if cv2 is None or np is None or self._bridge is None:
-            return self._refuse(response, "OpenCV, NumPy, or cv_bridge is unavailable")
+            return self._refuse(
+                response, "OpenCV, NumPy, or cv_bridge is unavailable"
+            )
         if self._latest_image is None:
             return self._refuse(response, "no workspace camera frame is available")
         try:
@@ -102,10 +113,14 @@ class CalibrationNode(Node):
         except Exception as exc:  # noqa: BLE001 - camera boundary
             return self._refuse(response, f"marker detection failed: {exc}")
         if homography is None:
-            return self._refuse(response, "all configured ArUco markers were not found")
+            return self._refuse(
+                response, "all configured ArUco markers were not found"
+            )
         calibration = WorkspaceCalibration(
             calibrated=True,
-            homography=tuple(tuple(float(value) for value in row) for row in homography),
+            homography=tuple(
+                tuple(float(value) for value in row) for row in homography
+            ),
             workspace_width_m=self._width,
             workspace_height_m=self._height,
             table_z_m=self._table_z,
@@ -141,7 +156,9 @@ class CalibrationNode(Node):
             centers[int(marker_id)] = marker_corners[0].mean(axis=0)
         if any(marker_id not in centers for marker_id in self._marker_ids):
             return None
-        source = np.float32([centers[marker_id] for marker_id in self._marker_ids])
+        source = np.float32(
+            [centers[marker_id] for marker_id in self._marker_ids]
+        )
         destination = np.float32(
             [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
         )

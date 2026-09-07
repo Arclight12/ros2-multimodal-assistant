@@ -6,6 +6,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
@@ -25,23 +27,29 @@ def generate_launch_description() -> LaunchDescription:
         )
     }
 
-    def node(package, executable, name, parameters):
+    def node(package, executable, name, parameters, overrides=None):
         return Node(
             package=package,
             executable=executable,
             name=name,
             output="screen",
             parameters=[config["system.yaml"]]
-            + [config[item] for item in parameters],
+            + [config[item] for item in parameters]
+            + [{"mock_mode": LaunchConfiguration("mock_mode")}]
+            + (overrides or []),
         )
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument("mock_mode", default_value="true"),
+            DeclareLaunchArgument("workspace_camera_url", default_value=""),
+            DeclareLaunchArgument("gaze_camera_index", default_value="0"),
             node(
                 "assistant_perception",
                 "workspace_camera_node",
                 "workspace_camera_node",
                 ["cameras.yaml"],
+                [{"camera_url": LaunchConfiguration("workspace_camera_url")}],
             ),
             node(
                 "assistant_perception",
@@ -66,6 +74,7 @@ def generate_launch_description() -> LaunchDescription:
                 "gaze_camera_node",
                 "gaze_camera_node",
                 ["cameras.yaml"],
+                [{"gaze_camera_index": LaunchConfiguration("gaze_camera_index")}],
             ),
             node(
                 "assistant_interaction",

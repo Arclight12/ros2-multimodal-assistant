@@ -45,7 +45,9 @@ class WorkspaceCameraNode(Node):
                     self._capture.release()
                     self._capture = None
         else:
-            self.get_logger().warning("Workspace camera running in deterministic mock mode.")
+            self.get_logger().warning(
+                "Workspace camera running in deterministic mock mode."
+            )
 
         fps = max(1.0, float(self.get_parameter("camera_fps").value))
         self._timer = self.create_timer(1.0 / fps, self._publish_next_frame)

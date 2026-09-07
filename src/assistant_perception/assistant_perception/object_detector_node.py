@@ -125,7 +125,11 @@ class ObjectDetectorNode(Node):
             ):
                 x1, y1, x2, y2 = box
                 object_message = DetectedObject()
-                class_name = str(names.get(int(class_id), int(class_id)))
+                class_index = int(class_id)
+                if isinstance(names, (list, tuple)):
+                    class_name = str(names[class_index])
+                else:
+                    class_name = str(names.get(class_index, class_index))
                 object_message.object_id = f"{class_name}_{index}"
                 object_message.class_name = class_name
                 object_message.confidence = float(confidence)

@@ -26,6 +26,18 @@ env/
 # A placeholder keeps the directory itself trackable.
 models/*
 !models/.gitkeep
+!models/gaze/
+!models/gaze/.gitkeep
+!models/object_detection/
+!models/object_detection/.gitkeep
+
+# Datasets are collected locally and are never committed.
+datasets/*
+!datasets/.gitkeep
+!datasets/gaze/
+!datasets/gaze/.gitkeep
+!datasets/object_detection/
+!datasets/object_detection/.gitkeep
 
 # Model weight files anywhere in the repo.
 *.pt
