@@ -1,0 +1,12 @@
+motion_planner_node:
+  ros__parameters:
+    moveit_enabled: false
+    robot_reach_min_m: 0.05
+    robot_reach_max_m: 0.6
+    detection_timeout_seconds: 1.0
+    pregrasp_offset_m: 0.08
+
+arm_controller_node:
+  ros__parameters:
+    serial_port: ""
+    baudrate: 115200

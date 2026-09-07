@@ -1,75 +1,95 @@
+"""Launch the complete gaze-guided manipulation graph."""
+
+from __future__ import annotations
+
 import os
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
-from ament_index_python.packages import get_package_share_directory
-
 
 def generate_launch_description() -> LaunchDescription:
-    """Generate the system launch description for the multimodal assistant.
-
-    Launches all nodes from the perception, interaction, and motion packages.
-    Parameters are loaded from ``config/system.yaml`` (shared across nodes).
-
-    :return: A populated LaunchDescription.
-    """
+    """Return the nine-node mock-safe system launch description."""
     bringup_dir = get_package_share_directory("assistant_bringup")
+    config_dir = os.path.join(bringup_dir, "config")
+    config = {
+        name: os.path.join(config_dir, name)
+        for name in (
+            "system.yaml",
+            "cameras.yaml",
+            "perception.yaml",
+            "gaze.yaml",
+            "workspace.yaml",
+            "robot.yaml",
+        )
+    }
 
-    config_path = os.path.join(bringup_dir, "config", "system.yaml")
-    example_map_path = os.path.join(
-        bringup_dir, "config", "object_map_example.json"
-    )
+    def node(package, executable, name, parameters):
+        return Node(
+            package=package,
+            executable=executable,
+            name=name,
+            output="screen",
+            parameters=[config["system.yaml"]]
+            + [config[item] for item in parameters],
+        )
 
     return LaunchDescription(
         [
-            # --- Perception layer ---
-            Node(
-                package="assistant_perception",
-                executable="workspace_mapper_node",
-                name="workspace_mapper_node",
-                output="screen",
-                parameters=[
-                    config_path,
-                    {"example_map_path": example_map_path},
-                ],
+            node(
+                "assistant_perception",
+                "workspace_camera_node",
+                "workspace_camera_node",
+                ["cameras.yaml"],
             ),
-            # --- Interaction layer ---
-            Node(
-                package="assistant_interaction",
-                executable="voice_node",
-                name="voice_node",
-                output="screen",
-                parameters=[config_path],
+            node(
+                "assistant_perception",
+                "object_detector_node",
+                "object_detector_node",
+                ["perception.yaml"],
             ),
-            Node(
-                package="assistant_interaction",
-                executable="gaze_node",
-                name="gaze_node",
-                output="screen",
-                parameters=[config_path],
+            node(
+                "assistant_perception",
+                "workspace_mapper_node",
+                "workspace_mapper_node",
+                ["perception.yaml", "workspace.yaml"],
             ),
-            Node(
-                package="assistant_interaction",
-                executable="selection_manager_node",
-                name="selection_manager_node",
-                output="screen",
-                parameters=[config_path],
+            node(
+                "assistant_perception",
+                "calibration_node",
+                "calibration_node",
+                ["perception.yaml", "workspace.yaml"],
             ),
-            # --- Motion layer ---
-            Node(
-                package="assistant_motion",
-                executable="motion_planner_node",
-                name="motion_planner_node",
-                output="screen",
-                parameters=[config_path],
+            node(
+                "assistant_interaction",
+                "gaze_camera_node",
+                "gaze_camera_node",
+                ["cameras.yaml"],
             ),
-            Node(
-                package="assistant_motion",
-                executable="arm_controller_node",
-                name="arm_controller_node",
-                output="screen",
-                parameters=[config_path],
+            node(
+                "assistant_interaction",
+                "gaze_estimation_node",
+                "gaze_estimation_node",
+                ["gaze.yaml"],
+            ),
+            node(
+                "assistant_interaction",
+                "selection_manager_node",
+                "selection_manager_node",
+                ["gaze.yaml"],
+            ),
+            node(
+                "assistant_motion",
+                "motion_planner_node",
+                "motion_planner_node",
+                ["workspace.yaml", "robot.yaml"],
+            ),
+            node(
+                "assistant_motion",
+                "arm_controller_node",
+                "arm_controller_node",
+                ["robot.yaml"],
             ),
         ]
     )
