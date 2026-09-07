@@ -15,9 +15,6 @@ opencv-contrib-python
 # --- Interaction: gaze (future: MediaPipe FaceMesh) ---
 mediapipe
 
-# --- Interaction: voice (future: Vosk offline speech recognition) ---
-vosk
-
 # --- Perception (future: YOLOv8n via Ultralytics) ---
 ultralytics
 

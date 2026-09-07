@@ -103,7 +103,7 @@ export service and stop seeding production runtime from fake example data.
 
 Use configurable laptop camera input, an optional model adapter, deterministic
 mock gaze, and the pure temporal selector. Do not infer object IDs in the gaze
-node. Keep the old voice executable available but out of the default launch.
+node. The gaze pipeline is the sole interaction path in this version.
 
 ### Task 6: Implement guarded grasp orchestration and arm isolation
 
