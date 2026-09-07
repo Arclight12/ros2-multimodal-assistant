@@ -1,30 +1,4 @@
-"""Perception node for scanning the tabletop workspace and generating the object map.
-
-This node is responsible for workspace understanding only. It abstracts the
-camera input, provides structural integration points for ArUco marker detection
-and YOLO object detection, and writes the resulting object coordinates to a JSON
-map consumed by the motion planner.
-
-No motion planning or interaction logic lives in this package.
-
-Responsibilities
-----------------
-* Camera abstraction (placeholder for a phone IP camera stream).
-* ArUco marker detection integration point (TODO).
-* YOLO object detection integration point (TODO).
-* Workspace frame estimation from ArUco markers (TODO).
-* Object coordinate mapping and runtime ``object_map.json`` generation.
-* Providing a ``/scan_workspace`` service.
-
-Topics
-------
-* Publishes ``/object_detections`` with raw detection results.
-* Publishes ``/workspace_status`` with textual status.
-
-Services
---------
-* ``/scan_workspace`` : triggers a workspace scan and map generation.
-"""
+"""Map continuous image detections into the robot workspace."""
 
 from __future__ import annotations
 
@@ -32,262 +6,194 @@ import json
 import os
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 
+from assistant_msgs.msg import DetectedObject, DetectedObjectArray
 from assistant_msgs.srv import ScanWorkspace
 
-from std_msgs.msg import String
+from .workspace_mapping import (
+    load_calibration,
+    map_pixel_to_base,
+    map_pixel_to_workspace,
+)
 
 
 class WorkspaceMapperNode(Node):
-    """Orchestrates a tabletop scan and maintains the object map."""
+    """Add workspace and robot coordinates to live detector output."""
 
     def __init__(self) -> None:
-        """Initialize the workspace mapper node and its resources."""
         super().__init__("workspace_mapper_node")
-
-        # Declare parameters with sensible defaults. These are overridable
-        # through the YAML configuration file and the launch file.
-        self.declare_parameter("camera_url", "http://192.168.1.100:8080/video")
+        self.declare_parameter("calibration_path", "")
         self.declare_parameter(
-            "object_map_path",
-            "~/.ros/ros2_multimodal_assistant/object_map.json",
+            "object_map_path", "~/.ros/ros2_multimodal_assistant/object_map.json"
         )
-        self.declare_parameter(
-            "example_map_path",
-            "",
-        )
-        self.declare_parameter("workspace_width", 40.0)
-        self.declare_parameter("workspace_height", 30.0)
-        self.declare_parameter("default_object_height", 5.0)
+        self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("mock_mode", True)
-        self.declare_parameter("debug_mode", False)
-
-        self._camera_url: str = (
-            self.get_parameter("camera_url").get_parameter_value().string_value
+        self._calibration_path = os.path.expanduser(
+            str(self.get_parameter("calibration_path").value)
         )
-        self._object_map_path: str = os.path.expanduser(
-            self.get_parameter("object_map_path").get_parameter_value().string_value
+        self._object_map_path = os.path.expanduser(
+            str(self.get_parameter("object_map_path").value)
         )
-        self._example_map_path: str = os.path.expanduser(
-            self.get_parameter("example_map_path").get_parameter_value().string_value
+        self._base_frame = str(self.get_parameter("base_frame").value)
+        self._mock_mode = bool(self.get_parameter("mock_mode").value)
+        self._last_array: DetectedObjectArray | None = None
+        self._warned_uncalibrated = False
+        self._publisher = self.create_publisher(
+            DetectedObjectArray, "/object_detections", 10
         )
-        self._workspace_width: float = (
-            self.get_parameter("workspace_width").get_parameter_value().double_value
+        self._status_publisher = self.create_publisher(String, "/workspace_status", 10)
+        self._subscription = self.create_subscription(
+            DetectedObjectArray,
+            "/object_detections_raw",
+            self._on_raw_detections,
+            10,
         )
-        self._workspace_height: float = (
-            self.get_parameter("workspace_height").get_parameter_value().double_value
-        )
-        self._default_object_height: float = (
-            self.get_parameter("default_object_height")
-            .get_parameter_value()
-            .double_value
-        )
-        self._mock_mode: bool = (
-            self.get_parameter("mock_mode").get_parameter_value().bool_value
-        )
-        self._debug_mode: bool = (
-            self.get_parameter("debug_mode").get_parameter_value().bool_value
-        )
-
-        self._object_map: Dict[str, Any] = {}
-
-        self._seed_runtime_map_from_example()
-
-        # Publishers for external visibility into the perception state.
-        self._detections_pub = self.create_publisher(String, "/object_detections", 10)
-        self._status_pub = self.create_publisher(String, "/workspace_status", 10)
-
-        # Service server to trigger scans.
         self._scan_service = self.create_service(
             ScanWorkspace, "/scan_workspace", self._scan_workspace_callback
         )
 
-        self.get_logger().info(
-            "WorkspaceMapperNode initialized | "
-            f"camera={self._camera_url} | object_map={self._object_map_path} | "
-            f"mock_mode={self._mock_mode}"
-        )
-
-    def _seed_runtime_map_from_example(self) -> None:
-        """Copy the packaged example map to the runtime location if missing.
-
-        The runtime object map lives outside the repository (see
-        ``object_map_path``) so scans never modify version-controlled files.
-        On first boot it is seeded from the example map shipped by
-        ``assistant_bringup`` so downstream nodes always find a valid map.
-        """
-        runtime_path = Path(self._object_map_path)
-        if runtime_path.exists():
-            return
-        if not self._example_map_path:
-            self.get_logger().warn(
-                "No example_map_path configured and no runtime map present; "
-                f"leaving object map unseeded at {runtime_path}"
+    def _on_raw_detections(self, raw: DetectedObjectArray) -> None:
+        """Map and republish one live detector frame."""
+        calibration = load_calibration(self._calibration_path)
+        mapped = DetectedObjectArray()
+        mapped.header = raw.header
+        mapped.image_width = raw.image_width
+        mapped.image_height = raw.image_height
+        mapped.calibrated = calibration is not None and calibration.is_valid
+        for raw_object in raw.objects:
+            mapped_object = self._copy_object(raw_object)
+            if calibration is not None and calibration.is_valid:
+                workspace = map_pixel_to_workspace(
+                    raw_object.image_center.x,
+                    raw_object.image_center.y,
+                    calibration,
+                )
+                robot = map_pixel_to_base(
+                    raw_object.image_center.x,
+                    raw_object.image_center.y,
+                    calibration,
+                )
+                if workspace is not None and robot is not None:
+                    mapped_object.workspace_center.x = workspace[0]
+                    mapped_object.workspace_center.y = workspace[1]
+                    mapped_object.robot_pose.position.x = robot[0]
+                    mapped_object.robot_pose.position.y = robot[1]
+                    mapped_object.robot_pose.position.z = robot[2]
+                    mapped_object.robot_pose.orientation.w = 1.0
+                    mapped_object.has_workspace_pose = True
+                    mapped_object.has_robot_pose = True
+                    mapped_object.header.frame_id = self._base_frame
+            mapped.objects.append(mapped_object)
+        self._last_array = mapped
+        self._publisher.publish(mapped)
+        if not mapped.calibrated and not self._warned_uncalibrated:
+            self._warned_uncalibrated = True
+            self.get_logger().warning(
+                "Workspace calibration is invalid; detections remain image-only."
             )
-            return
-        example_path = Path(self._example_map_path)
-        if not example_path.exists():
-            self.get_logger().warn(f"Example map not found at {example_path}")
-            return
-        runtime_path.parent.mkdir(parents=True, exist_ok=True)
-        runtime_path.write_text(
-            example_path.read_text(encoding="utf-8"), encoding="utf-8"
-        )
-        self.get_logger().info(f"Seeded runtime object map from {example_path}")
+
+    @staticmethod
+    def _copy_object(raw_object: DetectedObject) -> DetectedObject:
+        """Copy raw fields while avoiding mutation of the detector message."""
+        mapped = DetectedObject()
+        mapped.header = raw_object.header
+        mapped.object_id = raw_object.object_id
+        mapped.class_name = raw_object.class_name
+        mapped.confidence = raw_object.confidence
+        mapped.image_center = raw_object.image_center
+        mapped.bbox_width = raw_object.bbox_width
+        mapped.bbox_height = raw_object.bbox_height
+        return mapped
 
     def _scan_workspace_callback(
         self,
         request: ScanWorkspace.Request,
         response: ScanWorkspace.Response,
     ) -> ScanWorkspace.Response:
-        """Handle an incoming ``/scan_workspace`` service request.
-
-        :param request: The service request containing the scan flag.
-        :param response: The response to populate with success and message.
-        :return: The populated service response.
-        """
-        self.get_logger().info("Received scan request.")
-
+        """Export the most recent live frame for inspection or legacy tooling."""
         if not request.start_scan:
             response.success = False
             response.message = "No scan requested (start_scan=False)."
             return response
-
-        try:
-            self._publish_status("SCANNING")
-            self._perform_scan()
-            self._object_map = self._generate_object_map(self._capture_detections())
-            self._write_object_map(self._object_map)
-            self._publish_status("SCAN_COMPLETE")
-            response.success = True
-            if self._mock_mode:
-                mode_note = " (MOCK)"
-                self.get_logger().warn(
-                    "mock_mode=True: scan detections are simulated. "
-                    "No camera or inference is used."
-                )
-            else:
-                mode_note = ""
-            response.message = (
-                f"Scan complete{mode_note}. Found {len(self._object_map)} objects."
-            )
-        except Exception as exc:  # noqa: BLE001 - surface any scan failure to client
-            self.get_logger().error(f"Scan failed: {exc}")
-            self._publish_status("SCAN_ERROR")
+        self._publish_status("SCANNING")
+        if self._last_array is None:
             response.success = False
-            response.message = f"Scan failed: {exc}"
-
+            response.message = "No live detections available yet."
+            self._publish_status("SCAN_ERROR")
+            return response
+        try:
+            self._write_object_map(self._last_array)
+        except OSError as exc:
+            response.success = False
+            response.message = f"Scan export failed: {exc}"
+            self._publish_status("SCAN_ERROR")
+            return response
+        self._publish_status("SCAN_COMPLETE")
+        mode = " (MOCK)" if self._mock_mode else ""
+        response.success = True
+        response.message = (
+            f"Live scan export complete{mode}. "
+            f"Found {len(self._last_array.objects)} objects."
+        )
         return response
 
-    def _perform_scan(self) -> None:
-        """Execute the full scan pipeline.
-
-        Currently a skeleton. This is the primary extension point for:
-        * camera frame capture,
-        * ArUco marker detection,
-        * YOLO object detection.
-
-        TODO(perception-team): integrate camera capture from ``self._camera_url``.
-        TODO(perception-team): integrate ArUco detection to build workspace frame.
-        TODO(perception-team): integrate YOLOv8n inference for object detection.
-        """
-        self.get_logger().info("Performing workspace scan (skeleton).")
-        # Delay placeholder to simulate a synchronous scan.
-        self._scan_simulated()
-
-    def _scan_simulated(self) -> None:
-        """Simulate the timing of a real scan without doing any inference."""
-        self.get_logger().debug("Simulating scan...")
-
-    def _capture_detections(self) -> Dict[str, Any]:
-        """Capture or generate raw detections.
-
-        :return: A mapping of object name to pixel/frame detection data.
-        """
-        # TODO(perception-team): replace with real YOLO detections.
-        detections = {
-            "cup": {"x": 12.0, "y": 8.0},
-            "eraser": {"x": 5.0, "y": 14.0},
-        }
-        if self._mock_mode:
-            self.get_logger().warn(
-                "mock_mode=True: emitting simulated detections (cup, eraser)."
-            )
-        self._detections_pub.publish(String(data=json.dumps(detections)))
-        return detections
-
-    def _generate_object_map(self, detections: Dict[str, Any]) -> Dict[str, Any]:
-        """Map detected objects into workspace coordinates.
-
-        :param detections: Raw detections keyed by object name.
-        :return: A mapping of object name to workspace coordinates.
-        """
-        object_map: Dict[str, Any] = {}
-        for name, data in detections.items():
-            object_map[name] = {
-                "x": float(data.get("x", 0.0)),
-                "y": float(data.get("y", 0.0)),
-                "z": float(self._default_object_height),
+    def _write_object_map(self, detections: DetectedObjectArray) -> None:
+        """Write a provenance-bearing snapshot outside the repository."""
+        objects = {}
+        for object_message in detections.objects:
+            item = {
+                "class_name": object_message.class_name,
+                "confidence": float(object_message.confidence),
+                "image_x": float(object_message.image_center.x),
+                "image_y": float(object_message.image_center.y),
             }
-        return object_map
-
-    def _write_object_map(self, object_map: Dict[str, Any]) -> None:
-        """Persist the generated object map to the configured JSON path.
-
-        The file includes a ``_meta`` provenance block that records whether
-        the data is simulated (mock) and whether it has been calibrated, so
-        placeholder coordinates can never be mistaken for real robot
-        coordinates by downstream consumers.
-
-        :param object_map: The object map (name -> pose) to write to disk.
-        """
-        now = datetime.now(timezone.utc).isoformat(timespec="seconds")
+            if object_message.has_workspace_pose:
+                item["workspace_x_m"] = float(object_message.workspace_center.x)
+                item["workspace_y_m"] = float(object_message.workspace_center.y)
+            if object_message.has_robot_pose:
+                item["robot_pose"] = {
+                    "x": float(object_message.robot_pose.position.x),
+                    "y": float(object_message.robot_pose.position.y),
+                    "z": float(object_message.robot_pose.position.z),
+                }
+            objects[object_message.object_id] = item
         document = {
             "_meta": {
                 "mock": self._mock_mode,
-                "calibrated": False,
-                "source": "runtime_scan" if not self._mock_mode else "mock_scan",
-                "units": "cm",
-                "coordinate_frame": "workspace_base",
-                "last_scan_time": now if not self._mock_mode else None,
+                "calibrated": detections.calibrated,
+                "source": "continuous_snapshot",
+                "units": "m",
+                "coordinate_frame": self._base_frame,
+                "last_scan_time": datetime.now(timezone.utc).isoformat(
+                    timespec="seconds"
+                ),
             },
-            "objects": object_map,
+            "objects": objects,
         }
         path = Path(self._object_map_path)
         path.parent.mkdir(parents=True, exist_ok=True)
-        with path.open("w", encoding="utf-8") as handle:
-            json.dump(document, handle, indent=4)
-        self.get_logger().info(f"Object map written to {path}")
+        path.write_text(json.dumps(document, indent=2), encoding="utf-8")
 
-    def _publish_status(self, status: str) -> None:
-        """Publish a textual status update on ``/workspace_status``.
-
-        :param status: The status string to publish.
-        """
-        self._status_pub.publish(String(data=status))
-        self.get_logger().info(f"Workspace status: {status}")
+    def _publish_status(self, value: str) -> None:
+        """Publish a human-readable workspace status."""
+        self._status_publisher.publish(String(data=value))
 
     def shutdown_callback(self) -> None:
-        """Perform clean shutdown tasks.
-
-        Ensures the node unregisters cleanly and destroys its logger state.
-        """
-        self.get_logger().info("Shutting down workspace mapper node.")
+        """Provide a consistent node shutdown hook."""
 
 
 def main(args: list[str] | None = None) -> None:
-    """Entry point for the workspace mapper node executable."""
+    """Run the workspace mapper node."""
     rclpy.init(args=args)
     node = WorkspaceMapperNode()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Interrupted by user (Ctrl+C).")
+        pass
     finally:
         node.shutdown_callback()
         node.destroy_node()

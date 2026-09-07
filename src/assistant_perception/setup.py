@@ -18,7 +18,10 @@ setup(
     license="MIT",
     entry_points={
         "console_scripts": [
+            "workspace_camera_node = assistant_perception.workspace_camera_node:main",
+            "object_detector_node = assistant_perception.object_detector_node:main",
             "workspace_mapper_node = assistant_perception.workspace_mapper_node:main",
+            "calibration_node = assistant_perception.calibration_node:main",
         ],
     },
 )

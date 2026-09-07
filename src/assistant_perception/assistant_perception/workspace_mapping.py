@@ -32,9 +32,13 @@ def workspace_contains(
     x_m: float, y_m: float, width_m: float, height_m: float
 ) -> bool:
     """Return whether a workspace-local point lies inside its rectangle."""
-    return all(
-        math.isfinite(value) for value in (x_m, y_m, width_m, height_m)
-    ) and width_m > 0.0 and height_m > 0.0 and 0.0 <= x_m <= width_m and 0.0 <= y_m <= height_m
+    return (
+        all(math.isfinite(value) for value in (x_m, y_m, width_m, height_m))
+        and width_m > 0.0
+        and height_m > 0.0
+        and 0.0 <= x_m <= width_m
+        and 0.0 <= y_m <= height_m
+    )
 
 
 def map_pixel_to_base(
@@ -48,11 +52,29 @@ def map_pixel_to_base(
     The normalized point is then scaled into metres and rotated/translated into
     the robot base frame.
     """
+    workspace = map_pixel_to_workspace(pixel_x, pixel_y, calibration)
+    if workspace is None or not calibration.is_valid:
+        return None
+    workspace_x, workspace_y = workspace
+    cosine = math.cos(calibration.base_yaw_rad)
+    sine = math.sin(calibration.base_yaw_rad)
+    base_x = calibration.base_origin[0] + cosine * workspace_x - sine * workspace_y
+    base_y = calibration.base_origin[1] + sine * workspace_x + cosine * workspace_y
+    base_z = calibration.base_origin[2] + calibration.table_z_m
+    point = (base_x, base_y, base_z)
+    return point if all(math.isfinite(value) for value in point) else None
+
+
+def map_pixel_to_workspace(
+    pixel_x: float,
+    pixel_y: float,
+    calibration: WorkspaceCalibration,
+) -> tuple[float, float] | None:
+    """Map a phone pixel to workspace-local metres."""
     if not calibration.is_valid or not all(
         math.isfinite(value) for value in (pixel_x, pixel_y)
     ):
         return None
-
     try:
         row0, row1, row2 = calibration.homography
         denominator = row2[0] * pixel_x + row2[1] * pixel_y + row2[2]
@@ -66,24 +88,12 @@ def map_pixel_to_base(
         ) / denominator
     except (TypeError, ValueError):
         return None
-
-    if not workspace_contains(
-        normalized_x,
-        normalized_y,
-        1.0,
-        1.0,
-    ):
+    if not workspace_contains(normalized_x, normalized_y, 1.0, 1.0):
         return None
-
-    workspace_x = normalized_x * calibration.workspace_width_m
-    workspace_y = normalized_y * calibration.workspace_height_m
-    cosine = math.cos(calibration.base_yaw_rad)
-    sine = math.sin(calibration.base_yaw_rad)
-    base_x = calibration.base_origin[0] + cosine * workspace_x - sine * workspace_y
-    base_y = calibration.base_origin[1] + sine * workspace_x + cosine * workspace_y
-    base_z = calibration.base_origin[2] + calibration.table_z_m
-    point = (base_x, base_y, base_z)
-    return point if all(math.isfinite(value) for value in point) else None
+    return (
+        normalized_x * calibration.workspace_width_m,
+        normalized_y * calibration.workspace_height_m,
+    )
 
 
 def _matrix(value: Any) -> tuple[tuple[float, float, float], ...] | None:
@@ -127,7 +137,11 @@ def calibration_from_document(
     except (KeyError, TypeError, ValueError):
         return None
     values = (width, height, table_z, *origin, yaw)
-    if not all(math.isfinite(value) for value in values) or width <= 0.0 or height <= 0.0:
+    if (
+        not all(math.isfinite(value) for value in values)
+        or width <= 0.0
+        or height <= 0.0
+    ):
         return None
     return WorkspaceCalibration(
         calibrated=True,

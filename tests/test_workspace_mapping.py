@@ -4,6 +4,7 @@ from assistant_perception.workspace_mapping import (
     WorkspaceCalibration,
     load_calibration,
     map_pixel_to_base,
+    map_pixel_to_workspace,
     workspace_contains,
 )
 
@@ -24,6 +25,10 @@ def test_pixel_maps_through_normalized_workspace_to_base():
     point = map_pixel_to_base(500.0, 250.0, valid_calibration())
 
     assert point == (0.30000000000000004, -0.125, 0.42000000000000004)
+
+
+def test_pixel_maps_to_workspace_metres_before_base_transform():
+    assert map_pixel_to_workspace(500.0, 250.0, valid_calibration()) == (0.2, 0.075)
 
 
 def test_uncalibrated_mapping_returns_no_robot_point():
