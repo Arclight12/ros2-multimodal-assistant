@@ -2,6 +2,7 @@ from assistant_motion.grasp_safety import (
     GraspSafetyState,
     validate_real_grasp,
 )
+from assistant_motion.workspace_checks import reachable, valid_pose
 
 
 def safe_state(**overrides):
@@ -41,3 +42,10 @@ def test_uncalibrated_or_invalid_targets_are_refused():
     assert not validate_real_grasp(safe_state(target_in_workspace=False)).allowed
     assert not validate_real_grasp(safe_state(target_reachable=False)).allowed
     assert not validate_real_grasp(safe_state(hardware_available=False)).allowed
+
+
+def test_reachability_rejects_invalid_and_out_of_range_poses():
+    assert valid_pose((0.2, 0.1, 0.05))
+    assert not valid_pose(None)
+    assert reachable((0.2, 0.1, 0.05), 0.1, 0.5)
+    assert not reachable((0.8, 0.0, 0.05), 0.1, 0.5)
