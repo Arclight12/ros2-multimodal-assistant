@@ -96,7 +96,7 @@ The Modal recipe uses this flow:
 python -m pip install modal
 python -m modal setup
 python -m modal volume create ros-yolo-training
-python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc
+python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc/
 python -m modal run training/object_detection/modal_train.py
 python -m modal volume get ros-yolo-training /output/models/object_detector.pt ./models/object_detection/object_detector.pt
 ```

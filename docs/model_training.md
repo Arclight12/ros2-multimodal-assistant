@@ -65,7 +65,7 @@ Install and authenticate Modal:
 python -m pip install modal
 python -m modal setup
 python -m modal volume create ros-yolo-training
-python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc
+python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc/
 ```
 
 Run the remote fine-tuning job:
