@@ -2,7 +2,8 @@
 
 ## Status
 
-Approved by the user on 2026-09-08.
+Approved by the user on 2026-09-08; revised for Kaggle execution on
+2026-09-08.
 
 ## Goal
 
@@ -22,6 +23,12 @@ existing custom gaze model separate and compatible with the ROS runtime.
 - Keep training on the existing Ultralytics YOLOv8 path and export the best
   weights to `models/object_detection/object_detector.pt`.
 - Add focused unit tests for annotation parsing and dataset conversion.
+- Make every input and output path a CLI argument so the same commands work
+  with Kaggle's read-only `/kaggle/input` datasets and writable
+  `/kaggle/working` outputs.
+- Document a Kaggle notebook flow that installs dependencies, prepares the
+  subset, trains YOLOv8 on GPU when enabled, evaluates it, and exposes the
+  exported weights for download.
 - Document that ordinary ImageNet classification images are insufficient for
   grasping because they do not provide object locations; ImageNet-LOC or an
   equivalent box-annotated source is required.
@@ -29,6 +36,8 @@ existing custom gaze model separate and compatible with the ROS runtime.
 ## Out of scope
 
 - Automatic ImageNet downloading or credential handling.
+- A mandatory Kaggle notebook file; notebook cells in the training guide are
+  sufficient and avoid duplicating the CLI implementation.
 - Training a gaze model from ImageNet. Gaze remains trained from webcam grid
   samples using the existing MediaPipe-landmark feature pipeline.
 - Segmentation, monocular depth, 6D pose estimation, or grasp-pose learning.
@@ -43,6 +52,10 @@ The converter accepts an extracted ImageNet-LOC-style tree:
   annotations.
 - `--classes`: UTF-8 text file, one `synset_id<TAB>class_name` per line.
 - `--output`: YOLO dataset directory to create.
+
+For Kaggle, the input arguments point into `/kaggle/input/<dataset-name>/` and
+the output argument points into `/kaggle/working/`. The converter never writes
+under an input path.
 
 Each selected annotation is resolved to an image by the XML filename, then by
 the XML path with its extension changed to `.JPEG`, `.jpg`, or `.png`. The
@@ -72,6 +85,32 @@ entry point. Its default base model stays `yolov8n.pt`, and the prepared YAML
 is passed through `--data`. The model is custom because its detection head is
 fine-tuned on the selected project classes; no separate model is trained per
 object.
+
+The training CLI will expose Ultralytics' Kaggle-relevant controls as options:
+`--project`, `--name`, `--device`, `--workers`, and `--exist-ok`. Defaults stay
+local-friendly, while the documented Kaggle command writes runs and exported
+weights below `/kaggle/working/`.
+
+The Kaggle recipe uses this flow:
+
+```bash
+pip install -q ultralytics opencv-contrib-python pyyaml
+python training/object_detection/prepare_imagenet_subset.py \
+  --images-root /kaggle/input/imagenet-loc-subset/images \
+  --annotations-root /kaggle/input/imagenet-loc-subset/annotations \
+  --classes /kaggle/input/imagenet-loc-subset/classes.tsv \
+  --output /kaggle/working/yolo
+python training/object_detection/train.py \
+  --data /kaggle/working/yolo/data.yaml \
+  --base-model yolov8n.pt \
+  --device 0 \
+  --project /kaggle/working/runs \
+  --output /kaggle/working/models/object_detector.pt
+```
+
+If the Kaggle notebook has no GPU, `--device cpu` remains supported but will
+be slower. The user downloads `/kaggle/working/models/object_detector.pt` and
+configures that file as `object_model_path` in the ROS workspace.
 
 ## Verification
 
