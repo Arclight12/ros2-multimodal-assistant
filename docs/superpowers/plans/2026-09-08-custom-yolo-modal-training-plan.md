@@ -211,7 +211,7 @@ git add training/object_detection/modal_train.py requirements.txt tests/test_mod
 git commit -m "feat: train yolo26 on modal l40s"
 ```
 
-### Task 4: Replace Kaggle documentation with the Modal runbook
+### Task 4: Document the Modal runbook
 
 **Files:**
 - Modify: `docs/model_training.md`
@@ -222,7 +222,7 @@ git commit -m "feat: train yolo26 on modal l40s"
 
 - [ ] **Step 1: Replace the object-detection section**
 
-Document the required `imagenet-loc/` layout, `classes.tsv` format, ImageNet access limitation, Modal authentication via `modal setup`, volume upload, `modal run`, optional overrides, and `modal volume get`. Remove all Kaggle paths and commands.
+Document the required `imagenet-loc/` layout, `classes.tsv` format, ImageNet access limitation, Modal authentication via `python -m modal setup`, volume upload, `python -m modal run`, optional overrides, and `python -m modal volume get`. Do not document Kaggle paths or commands.
 
 - [ ] **Step 2: Add a local documentation consistency check**
 
@@ -255,19 +255,19 @@ Expected: all tests pass and compilation exits successfully.
 
 - [ ] **Step 2: Validate Modal CLI availability without starting training**
 
-Run: `modal run training/object_detection/modal_train.py --help`
+Run: `python -m modal run training/object_detection/modal_train.py --help`
 
 Expected: help output lists the local-entrypoint options, with no GPU allocation.
 
 - [ ] **Step 3: Check Modal authentication and the training volume**
 
-Run: `modal volume ls ros-yolo-training`.
+Run: `python -m modal volume ls ros-yolo-training`.
 
 If authentication is unavailable or the volume does not contain `imagenet-loc/images`, `imagenet-loc/annotations`, and `imagenet-loc/classes.tsv`, report the exact blocker instead of starting a doomed GPU job.
 
 - [ ] **Step 4: Run the real L40S training job when the volume is ready**
 
-Run: `modal run training/object_detection/modal_train.py --epochs 100 --batch-size 32 --image-size 640 --max-images-per-class 500`.
+Run: `python -m modal run training/object_detection/modal_train.py --epochs 100 --batch-size 32 --image-size 640 --max-images-per-class 500`.
 
 Expected: Modal provisions an L40S, filters the configured classes, trains `yolo26n.pt`, commits `/output/models/object_detector.pt`, and prints the persisted output path.
 
@@ -276,7 +276,7 @@ Expected: Modal provisions an L40S, filters the configured classes, trains `yolo
 Run:
 
 ```bash
-modal volume get ros-yolo-training /output/models/object_detector.pt models/object_detection/object_detector.pt
+python -m modal volume get ros-yolo-training /output/models/object_detector.pt models/object_detection/object_detector.pt
 python -c "from pathlib import Path; p=Path('models/object_detection/object_detector.pt'); assert p.is_file() and p.stat().st_size > 0; print(p)"
 ```
 

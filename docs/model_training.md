@@ -30,27 +30,71 @@ mean error and physical tabletop error in centimetres.
 
 ## Object detection
 
-Capture images from the actual fixed phone camera. Annotate the generated YOLO
-text files with the classes used by the project; the class list is data, not
-hardcoded source:
+The detector is fine-tuned remotely with Ultralytics YOLO26 nano
+(`yolo26n.pt`) on Modal's L40S GPU. Use ImageNet-LOC or another ImageNet
+subset with Pascal VOC XML bounding boxes; classification-only images cannot
+localize objects for grasping.
 
-```bash
-python3 training/object_detection/collect_data.py \
-  --source http://PHONE:8080/video --output datasets/object_detection/raw \
-  --frames 500
-printf 'cup\nbottle\ncube\n' > datasets/object_detection/classes.txt
-python3 training/object_detection/prepare_dataset.py \
-  --input datasets/object_detection/raw \
-  --output datasets/object_detection/yolo \
-  --classes datasets/object_detection/classes.txt
-python3 training/object_detection/train.py \
-  --data datasets/object_detection/yolo/data.yaml \
-  --output models/object_detection/object_detector.pt
-python3 training/object_detection/evaluate.py \
-  --model models/object_detection/object_detector.pt \
-  --data datasets/object_detection/yolo/data.yaml
+Create this local directory before uploading it:
+
+```text
+imagenet-loc/
+  images/<synset-id>/*.JPEG
+  annotations/<synset-id>/*.xml
+  classes.tsv
 ```
 
-Install `ultralytics` for training/evaluation. The ROS detector accepts the
-exported YOLO-family weights through `perception.yaml`; training is never run
-inside a ROS callback.
+`classes.tsv` selects the only classes that enter training. Use one
+`synset-id<TAB>class-name` per line, using the synset IDs from your extracted
+ImageNet directories and XML files:
+
+```text
+<cup-synset-id>	cup
+<bottle-synset-id>	bottle
+<ball-synset-id>	ball
+```
+
+The converter automatically ignores every other ImageNet class, limits the
+number of images per class, converts XML boxes to YOLO labels, and creates a
+deterministic train/validation split. ImageNet images must be obtained under
+their terms; the training code does not silently download them.
+
+Install and authenticate Modal:
+
+```bash
+python -m pip install modal
+python -m modal setup
+python -m modal volume create ros-yolo-training
+python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc
+```
+
+Run the remote fine-tuning job:
+
+```bash
+python -m modal run training/object_detection/modal_train.py \
+  --epochs 100 --batch-size 32 --image-size 640 \
+  --max-images-per-class 500
+```
+
+The job uses an L40S GPU, automatically downloads the pretrained `yolo26n.pt`
+checkpoint inside the Modal container, prepares the selected classes, trains,
+and saves:
+
+```text
+/output/models/object_detector.pt
+/output/runs/yolo26n/results.csv
+```
+
+Download the trained detector into the ROS workspace:
+
+```bash
+python -m modal volume get ros-yolo-training \
+  /output/models/object_detector.pt \
+  models/object_detection/object_detector.pt
+```
+
+For a repeat run with an existing prepared output, add `--force`. The ROS
+detector accepts the exported weights through `perception.yaml`; training is
+never run inside a ROS callback. The older local capture/preparation scripts
+remain useful for collecting phone-camera images for a later domain-specific
+fine-tuning pass.

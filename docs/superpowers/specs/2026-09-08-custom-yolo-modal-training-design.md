@@ -94,10 +94,11 @@ The Modal recipe uses this flow:
 
 ```bash
 python -m pip install modal
-modal volume create ros-yolo-training
-modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc
-modal run training/object_detection/modal_train.py
-modal volume get ros-yolo-training /output/models/object_detector.pt ./models/object_detection/object_detector.pt
+python -m modal setup
+python -m modal volume create ros-yolo-training
+python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc
+python -m modal run training/object_detection/modal_train.py
+python -m modal volume get ros-yolo-training /output/models/object_detector.pt ./models/object_detection/object_detector.pt
 ```
 
 The user supplies `classes.tsv` inside the uploaded `imagenet-loc` directory.
