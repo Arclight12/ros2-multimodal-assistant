@@ -79,7 +79,12 @@ def test_prepare_dataset_filters_classes_and_writes_yolo_layout(tmp_path):
     images.mkdir(parents=True)
     annotations.mkdir(parents=True)
     (images / "one.JPEG").write_bytes(b"image")
-    (annotations / "one.xml").write_text(XML_WITH_ONE_SELECTED_BOX, encoding="utf-8")
+    (annotations / "one.xml").write_text(
+        """<annotation><filename>one.JPEG</filename><size><width>100</width><height>80</height></size>
+        <object><name>n1</name><bndbox><xmin>10</xmin><ymin>20</ymin><xmax>60</xmax><ymax>70</ymax></bndbox></object>
+        </annotation>""",
+        encoding="utf-8",
+    )
     classes = tmp_path / "classes.tsv"
     classes.write_text("n1\\tcup\\n", encoding="utf-8")
 
