@@ -11,7 +11,7 @@ def build_parser() -> argparse.ArgumentParser:
     """Build the local and Modal-compatible training CLI."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data", type=Path, required=True)
-    parser.add_argument("--base-model", default="yolo26n.pt")
+    parser.add_argument("--base-model", default="yolo11n.pt")
     parser.add_argument("--epochs", type=int, default=50)
     parser.add_argument("--image-size", type=int, default=640)
     parser.add_argument("--batch-size", type=int, default=16)
@@ -45,6 +45,7 @@ def train_detector(args: argparse.Namespace) -> Path:
         "project": args.project,
         "name": args.name,
         "exist_ok": args.exist_ok,
+        "verbose": True,
     }
     if args.device is not None:
         train_options["device"] = args.device

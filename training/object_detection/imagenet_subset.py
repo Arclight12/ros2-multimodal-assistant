@@ -6,6 +6,7 @@ import math
 import random
 import shutil
 import xml.etree.ElementTree as ET
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping
@@ -143,41 +144,29 @@ def to_yolo_line(box: Box, width: int, height: int) -> str | None:
     )
 
 
-def _resolve_image(images_root: Path, annotation_path: Path, image_name: str) -> Path | None:
-    relative_annotation = annotation_path.relative_to(annotation_path.parents[1])
-    relative_stem = relative_annotation.with_suffix("")
-    names = [Path(image_name), relative_stem]
-    extensions = ("", ".JPEG", ".jpg", ".jpeg", ".png")
-    candidates: list[Path] = []
-    for name in names:
-        for extension in extensions:
-            candidate = images_root / name
-            if extension and not candidate.suffix:
-                candidate = candidate.with_suffix(extension)
-            candidates.append(candidate)
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    basename = Path(image_name).name.lower()
-    matches = [
-        path
-        for path in images_root.rglob("*")
-        if path.is_file() and path.name.lower() == basename
-    ]
-    return matches[0] if len(matches) == 1 else None
-
-
 def _records(
     images_root: Path,
     annotations_root: Path,
     mapping: ClassMapping,
 ) -> list[_Record]:
     records: list[_Record] = []
+    image_paths = [path for path in images_root.rglob("*") if path.is_file()]
+    images_by_key = {
+        (path.parent.name.lower(), path.stem.lower()): path for path in image_paths
+    }
+    images_by_stem: dict[str, list[Path]] = defaultdict(list)
+    for path in image_paths:
+        images_by_stem[path.stem.lower()].append(path)
     for annotation_path in sorted(annotations_root.rglob("*.xml")):
-        annotation = parse_annotation(annotation_path, mapping)
-        image = _resolve_image(images_root, annotation_path, annotation.image_name)
+        image = images_by_key.get(
+            (annotation_path.parent.name.lower(), annotation_path.stem.lower())
+        )
+        if image is None:
+            candidates = images_by_stem.get(annotation_path.stem.lower(), [])
+            image = candidates[0] if len(candidates) == 1 else None
         if image is None:
             continue
+        annotation = parse_annotation(annotation_path, mapping)
         labels = tuple(
             (box.class_id, label)
             for box in annotation.boxes

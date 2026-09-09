@@ -1,10 +1,10 @@
 from training.object_detection.train import build_parser
 
 
-def test_training_defaults_to_yolo26_nano() -> None:
+def test_training_defaults_to_yolo11_nano() -> None:
     args = build_parser().parse_args(["--data", "data.yaml"])
 
-    assert args.base_model == "yolo26n.pt"
+    assert args.base_model == "yolo11n.pt"
     assert args.device is None
     assert args.workers == 2
 
