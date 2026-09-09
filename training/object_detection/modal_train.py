@@ -1,4 +1,4 @@
-"""Fine-tune YOLO26n on an ImageNet-LOC subset using Modal."""
+"""Fine-tune YOLO11n on an ImageNet-LOC subset using Modal."""
 
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ except ImportError:  # pragma: no cover - remote dependency
 
 
 if modal is not None:
-    app = modal.App("ros-yolo26-training")
+    app = modal.App("ros-yolo11-training")
     volume = modal.Volume.from_name(DEFAULT_VOLUME_NAME, create_if_missing=True)
     image = (
         modal.Image.debian_slim(python_version="3.11")
@@ -163,7 +163,9 @@ if modal is not None:
         source_images = Path(images_root)
         source_annotations = Path(annotations_root)
         source_classes = Path(classes_path)
+        print("stage=started", flush=True)
         if download_from_kaggle:
+            print("stage=downloading_kaggle", flush=True)
             source_images.mkdir(parents=True, exist_ok=True)
             downloaded = _download_kaggle_images(
                 source_annotations,
@@ -175,6 +177,7 @@ if modal is not None:
             print(f"kaggle_images={downloaded}")
             volume.commit()
         validate_modal_paths(source_images, source_annotations, source_classes)
+        print("stage=preparing_dataset", flush=True)
         output = Path(output_root)
         summary = prepare_dataset(
             source_images,
@@ -186,7 +189,13 @@ if modal is not None:
             seed,
             force,
         )
+        print(
+            f"stage=dataset_ready images={summary.image_count} "
+            f"train={summary.train_count} val={summary.validation_count}",
+            flush=True,
+        )
         model_output = output / "models" / "object_detector.pt"
+        print(f"stage=training model={model_name} gpu={DEFAULT_GPU}", flush=True)
         train_detector(
             argparse.Namespace(
                 data=summary.data_yaml,
@@ -203,7 +212,9 @@ if modal is not None:
                 output=model_output,
             )
         )
+        print(f"stage=checkpoint_ready path={model_output}", flush=True)
         volume.commit()
+        print("stage=complete", flush=True)
         return str(model_output)
 
     @app.local_entrypoint()
