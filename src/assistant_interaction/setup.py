@@ -14,12 +14,12 @@ setup(
     zip_safe=True,
     maintainer="Multimodal Assistant Team",
     maintainer_email="team@example.com",
-    description="Human interaction package for voice, gaze and selection arbitration.",
+    description="Human interaction package for gaze and target selection.",
     license="MIT",
     entry_points={
         "console_scripts": [
-            "voice_node = assistant_interaction.voice_node:main",
-            "gaze_node = assistant_interaction.gaze_node:main",
+            "gaze_camera_node = assistant_interaction.gaze_camera_node:main",
+            "gaze_estimation_node = assistant_interaction.gaze_estimation_node:main",
             "selection_manager_node = assistant_interaction.selection_manager_node:main",
         ],
     },

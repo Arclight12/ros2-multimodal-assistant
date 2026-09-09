@@ -1,131 +1,156 @@
-"""Selection manager node: arbitrates between voice and gaze selections.
-
-The selection manager subscribes to both the voice and gaze object-id topics.
-When a selection arrives, it resolves any conflict according to the project
-rule that **voice takes priority** during disagreements. The final resolved
-selection is published on ``/final_selection`` for the motion planner.
-
-No motion planning or perception logic lives here.
-
-Topics
-------
-* Subscribes to ``/voice/object_id`` and ``/gaze/object_id``.
-* Publishes ``/final_selection`` (``assistant_msgs/ObjectSelection``).
-"""
+"""Fuse normalized gaze and live detections into a stable target selection."""
 
 from __future__ import annotations
-
-from typing import Optional
 
 import rclpy
 from rclpy.node import Node
 
-from assistant_msgs.msg import ObjectSelection
+from assistant_msgs.msg import DetectedObjectArray, GazePoint, ObjectSelection
 
-# Valid sources defined by the interface contract.
-_SOURCE_VOICE = "voice"
-_SOURCE_GAZE = "gaze"
+from .selection_logic import (
+    DetectionObservation,
+    GazeObservation,
+    SelectionConfig,
+    TemporalSelector,
+    nearest_valid_detection,
+)
 
 
 class SelectionManagerNode(Node):
-    """Resolve incoming voice/gaze selections into a single final selection."""
+    """Confirm the object closest to the user's gaze over multiple frames."""
 
     def __init__(self) -> None:
-        """Initialize the selection manager node."""
         super().__init__("selection_manager_node")
-
-        self.declare_parameter("confirmation_timeout", 1.5)
-
-        self._confirmation_timeout: float = (
-            self.get_parameter("confirmation_timeout")
-            .get_parameter_value()
-            .double_value
+        self.declare_parameter("selection_hold_seconds", 1.0)
+        self.declare_parameter("minimum_gaze_confidence", 0.8)
+        self.declare_parameter("maximum_gaze_object_distance", 0.15)
+        self.declare_parameter("minimum_detection_confidence", 0.7)
+        self._config = SelectionConfig(
+            minimum_gaze_confidence=float(
+                self.get_parameter("minimum_gaze_confidence").value
+            ),
+            minimum_detection_confidence=float(
+                self.get_parameter("minimum_detection_confidence").value
+            ),
+            maximum_gaze_object_distance=float(
+                self.get_parameter("maximum_gaze_object_distance").value
+            ),
         )
-
-        # Latest candidate object per source.
-        self._pending_selection: Optional[str] = None
-        self._pending_source: Optional[str] = None
-
+        self._selector = TemporalSelector(
+            float(self.get_parameter("selection_hold_seconds").value)
+        )
+        self._gaze: GazePoint | None = None
+        self._detections: DetectedObjectArray | None = None
         self._publisher = self.create_publisher(
             ObjectSelection, "/final_selection", 10
         )
-
-        self._voice_sub = self.create_subscription(
-            ObjectSelection, "/voice/object_id", self._on_voice, 10
+        self._gaze_subscription = self.create_subscription(
+            GazePoint, "/gaze/point", self._on_gaze, 10
         )
-        self._gaze_sub = self.create_subscription(
-            ObjectSelection, "/gaze/object_id", self._on_gaze, 10
+        self._detection_subscription = self.create_subscription(
+            DetectedObjectArray,
+            "/object_detections",
+            self._on_detections,
+            10,
         )
 
-        self.get_logger().info("SelectionManagerNode initialized.")
+    def _on_gaze(self, message: GazePoint) -> None:
+        """Update gaze and attempt a new stable selection."""
+        self._gaze = message
+        self._try_select()
 
-    def _on_voice(self, msg: ObjectSelection) -> None:
-        """Handle an incoming voice selection.
+    def _on_detections(self, message: DetectedObjectArray) -> None:
+        """Update the live scene and attempt a new stable selection."""
+        self._detections = message
+        self._try_select()
 
-        Voice is the highest-priority source. When received, it immediately wins
-        over any pending gaze selection.
-
-        :param msg: The voice selection message.
-        """
-        self.get_logger().info(
-            f"Received voice selection for object '{msg.object_id}'."
-        )
-        self._resolve_conflict(msg, priority=_SOURCE_VOICE)
-
-    def _on_gaze(self, msg: ObjectSelection) -> None:
-        """Handle an incoming gaze selection.
-
-        Gaze is lower priority than voice. If a voice selection is already
-        pending, the gaze selection is ignored.
-
-        :param msg: The gaze selection message.
-        """
-        self.get_logger().info(
-            f"Received gaze selection for object '{msg.object_id}'."
-        )
-        self._resolve_conflict(msg, priority=_SOURCE_GAZE)
-
-    def _resolve_conflict(self, msg: ObjectSelection, priority: str) -> None:
-        """Apply the arbitration rule and publish a final selection.
-
-        Rule: voice wins over gaze. Gaze is only accepted when no conflicting
-        voice selection exists.
-
-        :param msg: The incoming selection message.
-        :param priority: The source priority of this message.
-        """
-        if priority == _SOURCE_GAZE and self._pending_source == _SOURCE_VOICE:
-            self.get_logger().info(
-                "Conflict detected: voice has priority over gaze. "
-                f"Ignoring gaze '{msg.object_id}'."
-            )
+    def _try_select(self) -> None:
+        """Run confidence, distance, and temporal selection gates."""
+        if self._gaze is None or self._detections is None:
             return
+        gaze = GazeObservation(
+            x=float(self._gaze.x),
+            y=float(self._gaze.y),
+            confidence=float(self._gaze.confidence),
+            valid=bool(self._gaze.valid),
+        )
+        observations = [
+            self._to_observation(
+                item,
+                self._detections.image_width,
+                self._detections.image_height,
+            )
+            for item in self._detections.objects
+        ]
+        candidate = nearest_valid_detection(gaze, observations, self._config)
+        now = self.get_clock().now().nanoseconds / 1_000_000_000.0
+        confirmed = self._selector.update(candidate, now)
+        if confirmed is not None:
+            self._publish_selection(confirmed.detection, gaze)
 
-        self._pending_selection = msg.object_id
-        self._pending_source = msg.source
+    @staticmethod
+    def _to_observation(
+        message, image_width: int, image_height: int
+    ) -> DetectionObservation:
+        """Convert a ROS detection into the pure fusion representation."""
+        workspace_xy = None
+        if message.has_workspace_pose:
+            workspace_xy = (
+                float(message.workspace_center.x),
+                float(message.workspace_center.y),
+            )
+        robot_pose = None
+        if message.has_robot_pose:
+            robot_pose = (
+                float(message.robot_pose.position.x),
+                float(message.robot_pose.position.y),
+                float(message.robot_pose.position.z),
+            )
+        return DetectionObservation(
+            object_id=message.object_id,
+            class_name=message.class_name,
+            confidence=float(message.confidence),
+            image_x=float(message.image_center.x),
+            image_y=float(message.image_center.y),
+            image_width=float(image_width),
+            image_height=float(image_height),
+            workspace_xy=workspace_xy,
+            robot_pose=robot_pose,
+        )
 
-        selected = ObjectSelection()
-        selected.object_id = msg.object_id
-        selected.source = msg.source
-        self._publisher.publish(selected)
+    def _publish_selection(
+        self, detection: DetectionObservation, gaze: GazeObservation
+    ) -> None:
+        """Publish the authoritative confirmed selection."""
+        message = ObjectSelection()
+        message.header.stamp = self.get_clock().now().to_msg()
+        message.object_id = detection.object_id
+        message.source = "gaze"
+        message.confidence = min(gaze.confidence, detection.confidence)
+        if detection.robot_pose is not None:
+            message.target_pose.position.x = detection.robot_pose[0]
+            message.target_pose.position.y = detection.robot_pose[1]
+            message.target_pose.position.z = detection.robot_pose[2]
+            message.target_pose.orientation.w = 1.0
+            message.has_target_pose = True
+        self._publisher.publish(message)
         self.get_logger().info(
-            f"Final selection published: '{selected.object_id}' (source={selected.source})."
+            f"Confirmed gaze selection: {detection.object_id} "
+            f"(confidence={message.confidence:.2f})"
         )
 
     def shutdown_callback(self) -> None:
-        """Perform clean shutdown of the selection manager."""
-        self.get_logger().info("Shutting down selection manager node.")
+        """Provide a consistent node shutdown hook."""
 
 
 def main(args: list[str] | None = None) -> None:
-    """Entry point for the selection manager node executable."""
+    """Run the selection manager node."""
     rclpy.init(args=args)
     node = SelectionManagerNode()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Interrupted by user (Ctrl+C).")
+        pass
     finally:
         node.shutdown_callback()
         node.destroy_node()

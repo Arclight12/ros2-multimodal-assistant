@@ -1,0 +1,11 @@
+workspace_camera_node:
+  ros__parameters:
+    camera_url: ""
+    camera_frame_id: "workspace_camera"
+    camera_fps: 10.0
+
+gaze_camera_node:
+  ros__parameters:
+    gaze_camera_index: 0
+    gaze_camera_frame_id: "gaze_camera"
+    gaze_camera_fps: 15.0

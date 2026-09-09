@@ -5,7 +5,7 @@
 # MediaPipe / Vosk / Arduino). The current skeleton needs only `rclpy`, which
 # ships with ROS 2, plus the workspace packages themselves.
 
-# --- Perception (future: ArUco workspace mapping, YOLOv8n detection) ---
+# --- Perception (ArUco workspace mapping, YOLO26n detection) ---
 numpy
 opencv-contrib-python
 # NOTE: `opencv-python` is intentionally NOT listed. `opencv-contrib-python`
@@ -15,10 +15,7 @@ opencv-contrib-python
 # --- Interaction: gaze (future: MediaPipe FaceMesh) ---
 mediapipe
 
-# --- Interaction: voice (future: Vosk offline speech recognition) ---
-vosk
-
-# --- Perception (future: YOLOv8n via Ultralytics) ---
+# --- Perception (YOLO26n via Ultralytics) ---
 ultralytics
 
 # --- Motion: serial communication with Arduino (future) ---
@@ -26,3 +23,7 @@ pyserial
 
 # --- YAML configuration parsing ---
 pyyaml
+
+# --- Training only (not imported by ROS runtime nodes) ---
+torch
+modal

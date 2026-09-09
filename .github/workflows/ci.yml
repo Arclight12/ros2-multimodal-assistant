@@ -26,6 +26,7 @@ jobs:
           flake8 src/assistant_perception/assistant_perception
           flake8 src/assistant_interaction/assistant_interaction
           flake8 src/assistant_motion/assistant_motion
+          flake8 training
 
   build:
     name: ROS 2 Jazzy Build Validation
@@ -57,8 +58,14 @@ jobs:
 
       - name: Verify launch file syntax
         run: |
-          python3 -m py_compile \
-            src/assistant_bringup/launch/system.launch.py
+          find src -name '*.py' -print0 | xargs -0 python3 -m py_compile
+
+      - name: Run ROS package tests
+        working-directory: ${{ github.workspace }}
+        run: |
+          . install/setup.bash
+          colcon test --event-handlers console_direct+
+          colcon test-result --verbose
 
   repo-checks:
     name: Repository Checks
@@ -66,9 +73,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install test dependencies
+        run: python3 -m pip install pytest pyyaml
+
+      - name: Run hardware-free unit tests
+        run: |
+          PYTHONPATH=src/assistant_perception:src/assistant_interaction:src/assistant_motion \
+            python3 -m pytest -q tests
+
       - name: Validate YAML config
         run: |
-          python3 -c "import yaml,sys; yaml.safe_load(open('src/assistant_bringup/config/system.yaml')); print('system.yaml OK')"
+          python3 - <<'PY'
+          from pathlib import Path
+          import yaml
+          for path in Path('src/assistant_bringup/config').glob('*.yaml'):
+              yaml.safe_load(path.read_text())
+              print(f'{path} OK')
+          PY
 
       - name: Validate object map JSON
         run: |
@@ -77,7 +98,11 @@ jobs:
       - name: Validate interface files exist
         run: |
           test -f src/assistant_msgs/msg/ObjectSelection.msg
+          test -f src/assistant_msgs/msg/GazePoint.msg
+          test -f src/assistant_msgs/msg/DetectedObject.msg
+          test -f src/assistant_msgs/msg/DetectedObjectArray.msg
           test -f src/assistant_msgs/srv/ScanWorkspace.srv
+          test -f src/assistant_msgs/srv/CalibrateWorkspace.srv
           test -f src/assistant_msgs/action/ExecuteGrasp.action
           echo "Interfaces present."
 
