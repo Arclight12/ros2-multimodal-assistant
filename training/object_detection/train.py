@@ -45,6 +45,7 @@ def train_detector(args: argparse.Namespace) -> Path:
         "project": args.project,
         "name": args.name,
         "exist_ok": args.exist_ok,
+        "verbose": True,
     }
     if args.device is not None:
         train_options["device"] = args.device

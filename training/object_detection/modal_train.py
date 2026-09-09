@@ -177,7 +177,10 @@ if modal is not None:
             print(f"kaggle_images={downloaded}")
             volume.commit()
         validate_modal_paths(source_images, source_annotations, source_classes)
-        print("stage=preparing_dataset", flush=True)
+        print(
+            f"stage=preparing_dataset annotations={sum(1 for _ in source_annotations.rglob('*.xml'))}",
+            flush=True,
+        )
         output = Path(output_root)
         summary = prepare_dataset(
             source_images,
