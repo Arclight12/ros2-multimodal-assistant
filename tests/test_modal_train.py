@@ -11,7 +11,7 @@ from training.object_detection.modal_train import (
 
 
 def test_modal_defaults_use_l40s_paths() -> None:
-    assert DEFAULT_MODEL == "yolo26n.pt"
+    assert DEFAULT_MODEL == "yolo11n.pt"
     assert DEFAULT_VOLUME_NAME == "ros-yolo-training"
     assert DEFAULT_GPU == "L40S"
 

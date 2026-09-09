@@ -30,12 +30,13 @@ mean error and physical tabletop error in centimetres.
 
 ## Object detection
 
-The detector is fine-tuned remotely with Ultralytics YOLO26 nano
-(`yolo26n.pt`) on Modal's L40S GPU. Use ImageNet-LOC or another ImageNet
+The detector is fine-tuned remotely with the recent Ultralytics YOLO11 nano
+checkpoint (`yolo11n.pt`) on Modal's L40S GPU. Use ImageNet-LOC or another ImageNet
 subset with Pascal VOC XML bounding boxes; classification-only images cannot
 localize objects for grasping.
 
-Create this local directory before uploading it:
+Create only this small manifest locally; the images do not need to be downloaded
+to your computer:
 
 ```text
 imagenet-loc/
@@ -56,8 +57,8 @@ ImageNet directories and XML files:
 
 The converter automatically ignores every other ImageNet class, limits the
 number of images per class, converts XML boxes to YOLO labels, and creates a
-deterministic train/validation split. ImageNet images must be obtained under
-their terms; the training code does not silently download them.
+deterministic train/validation split. The Modal job uses the `Kaggle_Secret`
+secret to download only those matching JPEGs directly into the Modal volume.
 
 Install and authenticate Modal:
 
@@ -65,8 +66,13 @@ Install and authenticate Modal:
 python -m pip install modal
 python -m modal setup
 python -m modal volume create ros-yolo-training
-python -m modal volume put ros-yolo-training ./imagenet-loc /imagenet-loc/
 ```
+
+The volume must contain `imagenet-loc/annotations/` and
+`imagenet-loc/classes.tsv`. Upload the small ImageNet-LOC bounding-box archive
+or selected XML files once; do not upload the 160 GB image archive. Ensure the
+Modal secret named `Kaggle_Secret` contains `KAGGLE_KEY` (or
+`KAGGLE_API_TOKEN`).
 
 Run the remote fine-tuning job:
 
@@ -76,7 +82,7 @@ python -m modal run training/object_detection/modal_train.py \
   --max-images-per-class 500
 ```
 
-The job uses an L40S GPU, automatically downloads the pretrained `yolo26n.pt`
+The job uses an L40S GPU, automatically downloads the pretrained `yolo11n.pt`
 checkpoint inside the Modal container, prepares the selected classes, trains,
 and saves:
 
