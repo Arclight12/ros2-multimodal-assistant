@@ -88,7 +88,7 @@ and saves:
 
 ```text
 /output/models/object_detector.pt
-/output/runs/yolo26n/results.csv
+/output/runs/yolo11n/results.csv
 ```
 
 Download the trained detector into the ROS workspace:
