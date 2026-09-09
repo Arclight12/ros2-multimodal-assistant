@@ -146,7 +146,12 @@ def to_yolo_line(box: Box, width: int, height: int) -> str | None:
 def _resolve_image(images_root: Path, annotation_path: Path, image_name: str) -> Path | None:
     relative_annotation = annotation_path.relative_to(annotation_path.parents[1])
     relative_stem = relative_annotation.with_suffix("")
-    names = [Path(image_name), relative_stem]
+    names = [
+        Path(annotation_path.parent.name) / Path(image_name).name,
+        Path(annotation_path.parent.name) / annotation_path.name,
+        Path(image_name),
+        relative_stem,
+    ]
     extensions = ("", ".JPEG", ".jpg", ".jpeg", ".png")
     candidates: list[Path] = []
     for name in names:
