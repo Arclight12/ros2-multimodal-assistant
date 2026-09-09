@@ -42,6 +42,7 @@ imagenet-loc/
 
 # Model weight files anywhere in the repo.
 *.pt
+!models/object_detection/object_detector.pt
 *.pth
 *.onnx
 *.tflite

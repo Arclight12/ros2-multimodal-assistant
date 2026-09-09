@@ -21,6 +21,25 @@ DEFAULT_CLASSES_PATH = f"{DATA_MOUNT}/imagenet-loc/classes.tsv"
 DEFAULT_OUTPUT_ROOT = f"{DATA_MOUNT}/output"
 DEFAULT_KAGGLE_COMPETITION = "imagenet-object-localization-challenge"
 DEFAULT_KAGGLE_SECRET = "Kaggle_Secret"
+KAGGLE_DOWNLOAD_TIMEOUT_SECONDS = 120
+
+
+def _run_kaggle_download(
+    command: list[str], environment: dict[str, str]
+) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+            timeout=KAGGLE_DOWNLOAD_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(
+            f"Kaggle download timed out after {KAGGLE_DOWNLOAD_TIMEOUT_SECONDS}s"
+        ) from exc
 
 
 def validate_modal_paths(
@@ -87,24 +106,34 @@ if modal is not None:
                 with tempfile.TemporaryDirectory() as temporary:
                     environment = os.environ.copy()
                     environment["KAGGLE_CONFIG_DIR"] = str(Path(temporary) / "kaggle-config")
-                    result = subprocess.run(
-                        [
-                            "kaggle",
-                            "competitions",
-                            "download",
-                            "-c",
-                            DEFAULT_KAGGLE_COMPETITION,
-                            "-f",
-                            item.relative_image.as_posix(),
-                            "-p",
-                            temporary,
-                            "--quiet",
-                        ],
-                        check=False,
-                        capture_output=True,
-                        text=True,
-                        env=environment,
-                    )
+                    try:
+                        result = _run_kaggle_download(
+                            [
+                                "kaggle",
+                                "competitions",
+                                "download",
+                                "-c",
+                                DEFAULT_KAGGLE_COMPETITION,
+                                "-f",
+                                item.relative_image.as_posix(),
+                                "-p",
+                                temporary,
+                                "--quiet",
+                            ],
+                            environment,
+                        )
+                    except TimeoutError as exc:
+                        if attempt == 4:
+                            raise RuntimeError(
+                                f"Kaggle download timed out for {item.relative_image}"
+                            ) from exc
+                        print(
+                            f"kaggle_retry item={item.relative_image} "
+                            f"attempt={attempt + 1} reason=timeout",
+                            flush=True,
+                        )
+                        time.sleep(15 * (attempt + 1))
+                        continue
                     if not result.returncode:
                         candidates = [
                             path for path in Path(temporary).rglob("*") if path.is_file()
@@ -125,8 +154,16 @@ if modal is not None:
             return False
 
         # ponytail: one worker keeps Kaggle below its per-client request limit.
+        downloaded = 0
         with ThreadPoolExecutor(max_workers=1) as executor:
-            downloaded = sum(executor.map(download, items))
+            for index, result in enumerate(executor.map(download, items), 1):
+                downloaded += result
+                if index == 1 or index % 10 == 0 or index == len(items):
+                    print(
+                        f"kaggle_progress={index}/{len(items)} "
+                        f"downloaded={downloaded}",
+                        flush=True,
+                    )
         return downloaded
 
     @app.function(
