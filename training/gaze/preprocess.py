@@ -4,25 +4,25 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
 
-
-FEATURE_INDICES = (1, 33, 133, 159, 145, 263, 362, 386, 374, 152)
+# The ROS node and training must compute identical features.
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "assistant_interaction"))
+from assistant_interaction.gaze_features import landmark_features  # noqa: E402
 
 
 def extract_features(image, face_mesh):
-    """Return left-eye, right-eye, and head landmark features."""
+    """Return the shared gaze features for one RGB image, or None."""
     result = face_mesh.process(image)
     if not result.multi_face_landmarks:
         return None
-    landmarks = result.multi_face_landmarks[0].landmark
-    features = []
-    for index in FEATURE_INDICES:
-        landmark = landmarks[index]
-        features.extend((landmark.x, landmark.y, landmark.z))
-    return features
+    try:
+        return landmark_features(result.multi_face_landmarks[0].landmark)
+    except ValueError:
+        return None
 
 
 def main() -> None:

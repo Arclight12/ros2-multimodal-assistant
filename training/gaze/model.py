@@ -1,4 +1,4 @@
-"""Custom gaze feature-fusion regression model."""
+"""Gaze regression model over the shared face-landmark features."""
 
 from __future__ import annotations
 
@@ -12,34 +12,30 @@ except ImportError:  # pragma: no cover - training dependency
 
 if nn is not None:
 
-    class FusionRegressor(nn.Module):
-        """Fuse left-eye, right-eye, and head landmark features."""
+    class GazeRegressor(nn.Module):
+        """Standardize features inside the model, then regress `(x, y)` in 0-1."""
 
-        def __init__(self):
+        def __init__(self, mean, std, hidden=(256, 128, 64), dropout=0.1):
             super().__init__()
-            self.left_eye = nn.Sequential(nn.Linear(15, 32), nn.ReLU())
-            self.right_eye = nn.Sequential(nn.Linear(12, 32), nn.ReLU())
-            self.head = nn.Sequential(nn.Linear(3, 16), nn.ReLU())
-            self.regression = nn.Sequential(
-                nn.Linear(80, 32), nn.ReLU(), nn.Linear(32, 2), nn.Sigmoid()
-            )
+            self.register_buffer("mean", mean)
+            self.register_buffer("std", std)
+            layers, width = [], mean.numel()
+            for size in hidden:
+                layers += [nn.Linear(width, size), nn.ReLU(), nn.Dropout(dropout)]
+                width = size
+            self.net = nn.Sequential(*layers, nn.Linear(width, 2), nn.Sigmoid())
 
         def forward(self, values):
-            left = self.left_eye(values[:, :15])
-            right = self.right_eye(values[:, 15:27])
-            head = self.head(values[:, 27:30])
-            return self.regression(torch.cat((left, right, head), dim=1))
+            return self.net((values - self.mean) / self.std)
 
 else:
 
-    class FusionRegressor:  # pragma: no cover - only used for a clear error
+    class GazeRegressor:  # pragma: no cover - only used for a clear error
         """Placeholder type when torch is not installed."""
 
 
-def build_model(input_size: int = 30):
-    """Build the custom regressor for ten 3-D face landmarks."""
+def build_model(mean, std):
+    """Build the regressor; `mean` and `std` are per-feature training stats."""
     if torch is None or nn is None:
         raise RuntimeError("Install torch to build the gaze model.")
-    if input_size != 30:
-        raise ValueError("the first model expects ten 3-D face landmarks")
-    return FusionRegressor()
+    return GazeRegressor(mean, std)

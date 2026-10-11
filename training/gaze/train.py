@@ -9,42 +9,33 @@ from dataset import load_dataset
 from model import build_model
 
 
-def main() -> None:
-    """Train on the project's labelled gaze samples and export TorchScript."""
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--data", type=Path, required=True)
-    parser.add_argument("--output", type=Path, default=Path("models/gaze/gaze_model.pt"))
-    parser.add_argument("--epochs", type=int, default=50)
-    parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--learning-rate", type=float, default=1e-3)
-    args = parser.parse_args()
-    try:
-        import torch
-        from torch.utils.data import DataLoader, TensorDataset
-    except ImportError as exc:
-        raise SystemExit("Install torch to train the gaze model.") from exc
-    features, targets = load_dataset(args.data)
+def fit(features, targets, epochs=80, batch_size=64, learning_rate=1e-3, device="cpu"):
+    """Train on the first 80% of samples; return (TorchScript model, val error).
+
+    Samples are stored participant by participant, so the tail split validates
+    on people the model has not seen.
+    """
+    import torch
+
+    torch.manual_seed(0)
     split = max(1, int(len(features) * 0.8))
-    train_x = torch.from_numpy(features[:split])
-    train_y = torch.from_numpy(targets[:split])
-    validation_features = features[split:] if split < len(features) else features
-    validation_targets = targets[split:] if split < len(targets) else targets
-    validation_x = torch.from_numpy(validation_features)
-    validation_y = torch.from_numpy(validation_targets)
-    model = build_model(features.shape[1])
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate)
-    loss_function = torch.nn.MSELoss()
-    loader = DataLoader(
-        TensorDataset(train_x, train_y), args.batch_size, shuffle=True
+    x = torch.from_numpy(features).to(device)
+    y = torch.from_numpy(targets).to(device)
+    mean = x[:split].mean(0)
+    std = x[:split].std(0) + 1e-6
+    model = build_model(mean, std).to(device)
+    optimizer = torch.optim.AdamW(
+        model.parameters(), lr=learning_rate, weight_decay=1e-3
     )
-    best_error = float("inf")
-    best_state = None
-    for epoch in range(args.epochs):
+    validation_x, validation_y = (x[split:], y[split:]) if split < len(x) else (x, y)
+    best_error, best_state = float("inf"), None
+    for epoch in range(epochs):
         model.train()
-        for batch_x, batch_y in loader:
+        order = torch.randperm(split, device=device)
+        for start in range(0, split, batch_size):
+            batch = order[start:start + batch_size]
             optimizer.zero_grad()
-            loss = loss_function(model(batch_x), batch_y)
-            loss.backward()
+            torch.nn.functional.mse_loss(model(x[batch]), y[batch]).backward()
             optimizer.step()
         model.eval()
         with torch.no_grad():
@@ -53,16 +44,32 @@ def main() -> None:
             ).mean().item()
         if error < best_error:
             best_error = error
-            best_state = {
-                key: value.detach().clone()
-                for key, value in model.state_dict().items()
-            }
+            best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
         if (epoch + 1) % 10 == 0 or epoch == 0:
-            print(f"epoch={epoch + 1} validation_mean_error={error:.5f}")
-    if best_state is not None:
-        model.load_state_dict(best_state)
+            print(f"epoch={epoch + 1} validation_mean_error={error:.5f}", flush=True)
+    model.load_state_dict(best_state)
+    return torch.jit.script(model.eval().cpu()), best_error
+
+
+def main() -> None:
+    """Train on the project's labelled gaze samples and export TorchScript."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--data", type=Path, required=True)
+    parser.add_argument("--output", type=Path, default=Path("models/gaze/gaze_model.pt"))
+    parser.add_argument("--epochs", type=int, default=80)
+    parser.add_argument("--batch-size", type=int, default=64)
+    parser.add_argument("--learning-rate", type=float, default=1e-3)
+    args = parser.parse_args()
+    try:
+        import torch
+    except ImportError as exc:
+        raise SystemExit("Install torch to train the gaze model.") from exc
+    features, targets = load_dataset(args.data)
+    scripted, best_error = fit(
+        features, targets, args.epochs, args.batch_size, args.learning_rate
+    )
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    torch.jit.script(model.eval()).save(str(args.output))
+    scripted.save(str(args.output))
     print(f"saved={args.output} normalized_mean_error={best_error:.5f}")
 
 

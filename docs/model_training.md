@@ -23,8 +23,20 @@ python3 training/gaze/evaluate.py --data datasets/gaze/gaze.npz \
   --workspace-height-m 0.3
 ```
 
-The first model fuses selected left-eye, right-eye, and head landmarks into a
-two-coordinate regression head. Add sessions with different seating and
+To train without collecting your own data, use the public MPIIFaceGaze dataset
+(CC BY-NC-SA 4.0, non-commercial use). One command downloads it into a Modal
+volume, extracts features, trains on a T4, and saves the model locally:
+
+```bash
+python -m modal run training/gaze/modal_train.py
+```
+
+Public data is laptop-screen gaze, so expect extra error on a tabletop; add a
+short collected session to fine-tune for your geometry.
+
+The model regresses a two-coordinate gaze point from head-relative face-mesh
+landmarks and iris offsets (`assistant_interaction/gaze_features.py`, shared by
+training and the gaze node). Inputs are standardized inside the exported model. Add sessions with different seating and
 lighting rather than assuming a fixed face pose. Evaluation reports normalized
 mean error and physical tabletop error in centimetres.
 

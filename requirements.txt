@@ -12,8 +12,9 @@ opencv-contrib-python
 # is a superset that also provides the ArUco modules; installing both wheels
 # is redundant and can conflict.
 
-# --- Interaction: gaze (future: MediaPipe FaceMesh) ---
-mediapipe
+# --- Interaction: gaze (MediaPipe FaceMesh) ---
+# Pinned: MediaPipe 1.x removed the `mp.solutions` API the gaze node uses.
+mediapipe==0.10.21
 
 # --- Perception (YOLO26n via Ultralytics) ---
 ultralytics

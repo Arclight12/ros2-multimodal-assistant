@@ -11,6 +11,8 @@ from sensor_msgs.msg import Image
 
 from assistant_msgs.msg import GazePoint
 
+from .gaze_features import landmark_features
+
 try:
     from cv_bridge import CvBridge
 except ImportError:  # pragma: no cover - optional runtime dependency
@@ -25,9 +27,6 @@ try:
     import torch
 except ImportError:  # pragma: no cover - optional runtime dependency
     torch = None
-
-
-_FEATURE_INDICES = (1, 33, 133, 159, 145, 263, 362, 386, 374, 152)
 
 
 class GazeEstimationNode(Node):
@@ -120,11 +119,7 @@ class GazeEstimationNode(Node):
             if not result.multi_face_landmarks:
                 self._publish_invalid(image)
                 return
-            landmarks = result.multi_face_landmarks[0].landmark
-            features = []
-            for index in _FEATURE_INDICES:
-                landmark = landmarks[index]
-                features.extend((landmark.x, landmark.y, landmark.z))
+            features = landmark_features(result.multi_face_landmarks[0].landmark)
             prediction = self._model(
                 torch.tensor([features], dtype=torch.float32)
             )[0].tolist()
