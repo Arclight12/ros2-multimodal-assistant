@@ -1,0 +1,262 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080" role="img" aria-labelledby="title description">
+  <title id="title">Gaze-Guided ROS 2 Manipulation Assistant architecture</title>
+  <desc id="description">Code-accurate diagram of the two camera pipelines, gaze-based selection, calibration services, explicit grasp action, safety checks, serial arm controller, and external robot hardware.</desc>
+  <defs>
+    <linearGradient id="header" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0f2742"/>
+      <stop offset="1" stop-color="#174f78"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="7" flood-color="#0f172a" flood-opacity="0.10"/>
+    </filter>
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#2563eb"/></marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#15803d"/></marker>
+    <marker id="arrow-violet" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#7c3aed"/></marker>
+    <marker id="arrow-gold" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#d97706"/></marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#c2410c"/></marker>
+    <marker id="arrow-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path d="M0 0L10 5L0 10Z" fill="#475569"/></marker>
+    <style>
+      text { font-family: "Segoe UI", Arial, sans-serif; fill: #172033; }
+      .panel-title { font-size: 25px; font-weight: 700; }
+      .lane-title { font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+      .node-title { font-size: 19px; font-weight: 700; }
+      .body { font-size: 15px; }
+      .small { font-size: 13px; }
+      .topic { font-size: 13px; font-weight: 700; }
+      .muted { fill: #526173; }
+      .white { fill: #ffffff; }
+      .center { text-anchor: middle; }
+      .node { filter: url(#shadow); stroke-width: 2; }
+      .flow { fill: none; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+      .support { fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 9 8; }
+    </style>
+  </defs>
+
+  <rect width="1920" height="1080" fill="#f8fafc"/>
+  <rect x="40" y="30" width="1840" height="102" rx="20" fill="url(#header)" filter="url(#shadow)"/>
+  <text x="960" y="78" class="white center" font-size="38" font-weight="750">Gaze-Guided ROS 2 Manipulation Assistant</text>
+  <text x="960" y="109" class="white center" font-size="20" opacity="0.88">Implemented runtime architecture · ROS 2 Jazzy · code-accurate</text>
+
+  <!-- Major system boundaries -->
+  <rect x="40" y="158" width="270" height="744" rx="18" fill="#f1f5f9" stroke="#b6c5d5" stroke-width="2"/>
+  <rect x="330" y="158" width="1190" height="744" rx="18" fill="#f5fbff" stroke="#7aa4c2" stroke-width="2" stroke-dasharray="10 7"/>
+  <rect x="1540" y="158" width="340" height="744" rx="18" fill="#fffaf0" stroke="#d9b96d" stroke-width="2"/>
+  <text x="65" y="201" class="panel-title">Inputs &amp; triggers</text>
+  <text x="360" y="201" class="panel-title">ROS 2 runtime · laptop / main computer</text>
+  <text x="1570" y="201" class="panel-title">Robot hardware</text>
+
+  <!-- Inputs -->
+  <rect x="65" y="245" width="220" height="166" rx="16" fill="#ecfdf5" stroke="#79b991" stroke-width="2"/>
+  <rect x="87" y="272" width="56" height="86" rx="12" fill="#ffffff" stroke="#15803d" stroke-width="3"/>
+  <circle cx="115" cy="300" r="15" fill="none" stroke="#15803d" stroke-width="4"/>
+  <circle cx="115" cy="300" r="6" fill="#15803d"/>
+  <path d="M97 347h36M115 331v16" stroke="#15803d" stroke-width="4" stroke-linecap="round"/>
+  <text x="159" y="280" class="node-title">Fixed phone</text>
+  <text x="159" y="305" class="body">workspace camera</text>
+  <text x="159" y="330" class="small muted">IP / MJPEG stream</text>
+  <text x="175" y="382" class="small center" fill="#166534">Tabletop + 4 ArUco markers</text>
+
+  <rect x="65" y="477" width="220" height="145" rx="16" fill="#eff6ff" stroke="#7aa8dd" stroke-width="2"/>
+  <rect x="89" y="505" width="60" height="47" rx="8" fill="#ffffff" stroke="#2563eb" stroke-width="3"/>
+  <circle cx="119" cy="528" r="11" fill="none" stroke="#2563eb" stroke-width="4"/>
+  <path d="M101 567h36M119 552v15" stroke="#2563eb" stroke-width="4" stroke-linecap="round"/>
+  <text x="164" y="514" class="node-title">Laptop</text>
+  <text x="164" y="539" class="body">webcam</text>
+  <text x="164" y="566" class="small muted">faces the user</text>
+  <text x="175" y="596" class="small center" fill="#1d4ed8">Gaze images only</text>
+
+  <rect x="65" y="724" width="220" height="123" rx="16" fill="#fff7ed" stroke="#e9a55d" stroke-width="2"/>
+  <circle cx="111" cy="766" r="20" fill="#ffffff" stroke="#d97706" stroke-width="3"/>
+  <path d="M103 766l6 6 12-15" fill="none" stroke="#d97706" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="146" y="754" class="node-title">Operator /</text>
+  <text x="146" y="779" class="node-title">action client</text>
+  <text x="175" y="817" class="small center" fill="#9a5606">Explicit grasp request</text>
+
+  <!-- Lane labels -->
+  <rect x="360" y="227" width="206" height="34" rx="17" fill="#dcfce7"/>
+  <text x="463" y="249" class="lane-title center" fill="#166534">WORKSPACE PERCEPTION</text>
+  <rect x="360" y="462" width="146" height="34" rx="17" fill="#dbeafe"/>
+  <text x="433" y="484" class="lane-title center" fill="#1d4ed8">GAZE &amp; INTENT</text>
+  <rect x="360" y="687" width="206" height="34" rx="17" fill="#ffedd5"/>
+  <text x="463" y="709" class="lane-title center" fill="#9a3412">MOTION &amp; SAFETY</text>
+
+  <!-- Workspace perception nodes -->
+  <rect x="365" y="283" width="220" height="126" rx="15" class="node" fill="#ffffff" stroke="#34a461"/>
+  <rect x="365" y="283" width="220" height="34" rx="15" fill="#15803d"/>
+  <path d="M365 302h220v15H365Z" fill="#15803d"/>
+  <text x="475" y="306" class="white center" font-size="16" font-weight="700">workspace_camera_node</text>
+  <text x="475" y="345" class="body center">Captures phone stream</text>
+  <text x="475" y="370" class="body center">Publishes ROS Image</text>
+  <text x="475" y="393" class="small center muted">→ /workspace/image_raw</text>
+
+  <rect x="635" y="283" width="220" height="126" rx="15" class="node" fill="#ffffff" stroke="#34a461"/>
+  <rect x="635" y="283" width="220" height="34" rx="15" fill="#15803d"/>
+  <path d="M635 302h220v15H635Z" fill="#15803d"/>
+  <text x="745" y="306" class="white center" font-size="16" font-weight="700">object_detector_node</text>
+  <text x="745" y="345" class="body center">YOLO object detection</text>
+  <text x="745" y="370" class="body center">Image-space boxes + IDs</text>
+  <text x="745" y="393" class="small center muted">→ /object_detections_raw</text>
+
+  <rect x="905" y="283" width="250" height="126" rx="15" class="node" fill="#ffffff" stroke="#34a461"/>
+  <rect x="905" y="283" width="250" height="34" rx="15" fill="#15803d"/>
+  <path d="M905 302h250v15H905Z" fill="#15803d"/>
+  <text x="1030" y="306" class="white center" font-size="16" font-weight="700">workspace_mapper_node</text>
+  <text x="1030" y="343" class="body center">Planar homography + configured</text>
+  <text x="1030" y="366" class="body center">workspace-to-base transform</text>
+  <text x="1030" y="391" class="small center muted">Adds workspace and robot poses</text>
+
+  <!-- Workspace topic flows -->
+  <path d="M285 328H365" class="flow" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="325" y="317" class="topic center" fill="#15803d">video</text>
+  <path d="M585 346H635" class="flow" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="610" y="333" class="topic center" fill="#15803d">Image</text>
+  <path d="M855 346H905" class="flow" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="880" y="333" class="topic center" fill="#15803d">Raw detections</text>
+
+  <!-- Gaze nodes -->
+  <rect x="365" y="518" width="220" height="126" rx="15" class="node" fill="#ffffff" stroke="#4f86d8"/>
+  <rect x="365" y="518" width="220" height="34" rx="15" fill="#2563eb"/>
+  <path d="M365 537h220v15H365Z" fill="#2563eb"/>
+  <text x="475" y="541" class="white center" font-size="16" font-weight="700">gaze_camera_node</text>
+  <text x="475" y="580" class="body center">Captures laptop webcam</text>
+  <text x="475" y="605" class="body center">Publishes ROS Image</text>
+  <text x="475" y="628" class="small center muted">→ /gaze/image_raw</text>
+
+  <rect x="635" y="518" width="220" height="126" rx="15" class="node" fill="#ffffff" stroke="#4f86d8"/>
+  <rect x="635" y="518" width="220" height="34" rx="15" fill="#2563eb"/>
+  <path d="M635 537h220v15H635Z" fill="#2563eb"/>
+  <text x="745" y="541" class="white center" font-size="16" font-weight="700">gaze_estimation_node</text>
+  <text x="745" y="578" class="body center">MediaPipe landmarks +</text>
+  <text x="745" y="601" class="body center">TorchScript regressor</text>
+  <text x="745" y="627" class="small center muted">→ /gaze/point</text>
+
+  <rect x="905" y="518" width="250" height="126" rx="15" class="node" fill="#ffffff" stroke="#9270d4"/>
+  <rect x="905" y="518" width="250" height="34" rx="15" fill="#7c3aed"/>
+  <path d="M905 537h250v15H905Z" fill="#7c3aed"/>
+  <text x="1030" y="541" class="white center" font-size="16" font-weight="700">selection_manager_node</text>
+  <text x="1030" y="578" class="body center">Nearest valid detection</text>
+  <text x="1030" y="601" class="body center">confidence · distance · 1 s hold</text>
+  <text x="1030" y="627" class="small center muted">Publishes one stable target</text>
+
+  <!-- Gaze and selection flows -->
+  <path d="M285 550H365" class="flow" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+  <text x="325" y="539" class="topic center" fill="#2563eb">video</text>
+  <path d="M585 581H635" class="flow" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+  <text x="610" y="568" class="topic center" fill="#2563eb">Image</text>
+  <path d="M855 581H905" class="flow" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+  <text x="880" y="568" class="topic center" fill="#2563eb">Gaze point</text>
+  <path d="M1030 409V518" class="flow" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <rect x="1041" y="438" width="154" height="28" rx="8" fill="#f5fbff"/>
+  <text x="1118" y="457" class="topic center" fill="#15803d">/object_detections</text>
+
+  <!-- Calibration and scan sidecars -->
+  <rect x="1205" y="258" width="280" height="151" rx="15" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <text x="1345" y="291" class="node-title center">calibration_node</text>
+  <text x="1345" y="321" class="body center">Four-marker ArUco homography</text>
+  <text x="1345" y="346" class="small center muted">Operator-triggered service</text>
+  <rect x="1242" y="364" width="206" height="28" rx="14" fill="#e2e8f0"/>
+  <text x="1345" y="383" class="topic center" fill="#475569">/calibrate_workspace</text>
+  <path d="M610 346V239H1345V258" class="support" stroke="#475569" marker-end="url(#arrow-slate)"/>
+  <text x="920" y="230" class="small center muted">latest workspace image</text>
+
+  <rect x="1205" y="433" width="280" height="91" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+  <path d="M1230 452h30l10 10v40h-40Z" fill="#f1f5f9" stroke="#64748b" stroke-width="2"/>
+  <path d="M1260 452v11h10" fill="none" stroke="#64748b" stroke-width="2"/>
+  <text x="1284" y="465" class="body" font-weight="700">workspace_calibration.json</text>
+  <text x="1284" y="489" class="small muted">written by calibration · read by mapper</text>
+  <text x="1284" y="510" class="small muted">stored under ~/.ros by default</text>
+  <path d="M1345 409V433" class="support" stroke="#475569" marker-end="url(#arrow-slate)"/>
+  <path d="M1205 479H1178V382H1155" class="support" stroke="#475569" marker-end="url(#arrow-slate)"/>
+
+  <rect x="1205" y="548" width="280" height="107" rx="14" fill="#ffffff" stroke="#94a3b8" stroke-width="2"/>
+  <text x="1345" y="579" class="node-title center">/scan_workspace</text>
+  <text x="1345" y="605" class="body center">Exports object_map.json snapshot</text>
+  <text x="1345" y="631" class="small center" fill="#b45309">Not a runtime dependency</text>
+  <path d="M1155 403H1184V601H1205" class="support" stroke="#475569" marker-end="url(#arrow-slate)"/>
+
+  <!-- Motion node and flows -->
+  <rect x="835" y="722" width="340" height="154" rx="15" class="node" fill="#ffffff" stroke="#e18c3c"/>
+  <rect x="835" y="722" width="340" height="36" rx="15" fill="#d97706"/>
+  <path d="M835 742h340v16H835Z" fill="#d97706"/>
+  <text x="1005" y="747" class="white center" font-size="17" font-weight="700">motion_planner_node · safety boundary</text>
+  <text x="1005" y="783" class="body center">/execute_grasp action server</text>
+  <text x="1005" y="807" class="small center">Rechecks live detection + stable selection</text>
+  <text x="1005" y="831" class="small center">calibration · pose · bounds · reachability</text>
+  <text x="1005" y="855" class="small center">hardware · MoveIt enable flag</text>
+
+  <rect x="1215" y="722" width="270" height="154" rx="15" class="node" fill="#ffffff" stroke="#db744f"/>
+  <rect x="1215" y="722" width="270" height="36" rx="15" fill="#c2410c"/>
+  <path d="M1215 742h270v16H1215Z" fill="#c2410c"/>
+  <text x="1350" y="747" class="white center" font-size="17" font-weight="700">arm_controller_node</text>
+  <text x="1350" y="789" class="body center">Validates allowlisted JSON</text>
+  <text x="1350" y="815" class="body center">Encodes ASCII serial frames</text>
+  <text x="1350" y="848" class="small center muted">Isolates hardware I/O</text>
+
+  <path d="M285 786H835" class="flow" stroke="#d97706" marker-end="url(#arrow-gold)"/>
+  <rect x="500" y="764" width="195" height="29" rx="8" fill="#f5fbff"/>
+  <text x="598" y="784" class="topic center" fill="#b45309">/execute_grasp (Action)</text>
+  <path d="M970 644V722" class="flow" stroke="#7c3aed" marker-end="url(#arrow-violet)"/>
+  <rect x="872" y="665" width="136" height="28" rx="8" fill="#f5fbff"/>
+  <text x="940" y="684" class="topic center" fill="#7c3aed">/final_selection</text>
+  <path d="M1155 360H1181V699H1125V722" class="flow" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <rect x="1063" y="670" width="147" height="28" rx="8" fill="#f5fbff"/>
+  <text x="1137" y="689" class="topic center" fill="#15803d">live detections</text>
+  <path d="M1175 782H1215" class="flow" stroke="#c2410c" marker-end="url(#arrow-orange)"/>
+  <text x="1195" y="771" class="small center" fill="#c2410c">/arm/command</text>
+  <path d="M1215 839H1175" class="support" stroke="#475569" marker-end="url(#arrow-slate)"/>
+  <text x="1195" y="861" class="small center muted">/arm/status</text>
+
+  <!-- Mock-mode ribbon -->
+  <rect x="360" y="856" width="433" height="29" rx="14" fill="#dcfce7" stroke="#86c99d"/>
+  <circle cx="379" cy="870" r="6" fill="#15803d"/>
+  <text x="393" y="875" class="small" fill="#166534" font-weight="700">DEFAULT MOCK MODE: deterministic graph · no hardware commands</text>
+
+  <!-- Hardware boundary -->
+  <rect x="1568" y="242" width="284" height="150" rx="15" fill="#ffffff" stroke="#d7bc7a" stroke-width="2"/>
+  <circle cx="1611" cy="286" r="20" fill="#fff7ed" stroke="#d97706" stroke-width="3"/>
+  <path d="M1601 286h20M1611 276v20" stroke="#d97706" stroke-width="3" stroke-linecap="round"/>
+  <text x="1645" y="275" class="node-title">External to this</text>
+  <text x="1645" y="300" class="node-title">repository</text>
+  <text x="1710" y="337" class="body center">Runtime code ends at a</text>
+  <text x="1710" y="361" class="body center">validated serial protocol.</text>
+
+  <rect x="1568" y="632" width="284" height="108" rx="15" fill="#ffffff" stroke="#d7bc7a" stroke-width="2"/>
+  <rect x="1595" y="658" width="58" height="44" rx="6" fill="#e6f4ef" stroke="#277a62" stroke-width="3"/>
+  <path d="M1604 650v8M1617 650v8M1630 650v8M1643 650v8M1604 702v8M1617 702v8M1630 702v8M1643 702v8" stroke="#277a62" stroke-width="3"/>
+  <text x="1670" y="666" class="node-title">Serial controller</text>
+  <text x="1670" y="692" class="body">Microcontroller + firmware</text>
+  <text x="1710" y="720" class="small center muted">for example, Arduino-compatible</text>
+
+  <rect x="1568" y="768" width="284" height="108" rx="15" fill="#ffffff" stroke="#d7bc7a" stroke-width="2"/>
+  <circle cx="1617" cy="814" r="25" fill="#fff7ed" stroke="#d97706" stroke-width="3"/>
+  <circle cx="1617" cy="814" r="8" fill="#d97706"/>
+  <path d="M1642 814h25l17-22 22 32 23-20" fill="none" stroke="#1f2937" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M1726 802l16-10M1729 807l17 4" stroke="#1f2937" stroke-width="5" stroke-linecap="round"/>
+  <text x="1710" y="848" class="node-title center">Servos · 4-DOF arm · gripper</text>
+  <path d="M1710 740V768" class="flow" stroke="#475569" marker-end="url(#arrow-slate)"/>
+  <path d="M1485 799H1532V686H1568" class="flow" stroke="#c2410c" marker-end="url(#arrow-orange)"/>
+  <text x="1517" y="747" class="small center" fill="#c2410c" transform="rotate(-90 1517 747)">Serial / USB</text>
+
+  <!-- Legend -->
+  <rect x="40" y="927" width="1840" height="116" rx="17" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <text x="66" y="965" class="panel-title">Legend</text>
+  <path d="M182 960h60" class="flow" stroke="#2563eb" marker-end="url(#arrow-blue)"/>
+  <text x="256" y="966" class="body">image / gaze topic</text>
+  <path d="M440 960h60" class="flow" stroke="#15803d" marker-end="url(#arrow-green)"/>
+  <text x="514" y="966" class="body">detection topic</text>
+  <path d="M690 960h60" class="flow" stroke="#7c3aed" marker-end="url(#arrow-violet)"/>
+  <text x="764" y="966" class="body">confirmed selection</text>
+  <path d="M977 960h60" class="flow" stroke="#d97706" marker-end="url(#arrow-gold)"/>
+  <text x="1051" y="966" class="body">action request</text>
+  <path d="M1245 960h60" class="flow" stroke="#c2410c" marker-end="url(#arrow-orange)"/>
+  <text x="1319" y="966" class="body">arm command / serial</text>
+  <path d="M1550 960h60" class="support" stroke="#475569" marker-end="url(#arrow-slate)"/>
+  <text x="1624" y="966" class="body">service / file / status</text>
+  <rect x="180" y="992" width="28" height="28" rx="6" fill="#ffffff" stroke="#64748b" stroke-width="2"/>
+  <text x="220" y="1012" class="body">ROS 2 node</text>
+  <rect x="440" y="992" width="28" height="28" rx="6" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+  <text x="480" y="1012" class="body">supporting service / artifact</text>
+  <rect x="770" y="992" width="28" height="28" rx="6" fill="#fffaf0" stroke="#d7bc7a" stroke-width="2"/>
+  <text x="810" y="1012" class="body">external hardware</text>
+  <text x="1845" y="1012" class="small muted" text-anchor="end">Source: repository nodes, interfaces, launch and configuration</text>
+</svg>
