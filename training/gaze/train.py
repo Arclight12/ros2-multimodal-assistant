@@ -61,7 +61,7 @@ def main() -> None:
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     args = parser.parse_args()
     try:
-        import torch
+        import torch  # noqa: F401 - availability guard; fit() uses torch
     except ImportError as exc:
         raise SystemExit("Install torch to train the gaze model.") from exc
     features, targets = load_dataset(args.data)

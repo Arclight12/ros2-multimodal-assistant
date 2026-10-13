@@ -140,7 +140,8 @@ if modal is not None:
                         ]
                         if len(candidates) != 1:
                             raise RuntimeError(
-                                f"unexpected Kaggle download for {item.relative_image}: {candidates}"
+                                "unexpected Kaggle download for "
+                                f"{item.relative_image}: {candidates}"
                             )
                         shutil.copy2(candidates[0], target)
                         return True
@@ -215,7 +216,8 @@ if modal is not None:
             volume.commit()
         validate_modal_paths(source_images, source_annotations, source_classes)
         print(
-            f"stage=preparing_dataset annotations={sum(1 for _ in source_annotations.rglob('*.xml'))}",
+            "stage=preparing_dataset "
+            f"annotations={sum(1 for _ in source_annotations.rglob('*.xml'))}",
             flush=True,
         )
         output = Path(output_root)
