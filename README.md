@@ -30,24 +30,35 @@ Set values in `src/assistant_bringup/config/cameras.yaml` or override them:
 ```bash
 ros2 launch assistant_bringup system.launch.py \
   workspace_camera_url:=http://PHONE:8080/video \
-  gaze_camera_index:=0 mock_mode:=false
+  gaze_camera_index:=0 gaze_camera_backend:=dshow mock_mode:=false
 ```
 
-The phone URL and laptop device are parameters, not source-code constants. See
-[docs/setup.md](docs/setup.md) and [docs/calibration.md](docs/calibration.md).
+The phone URL and laptop device are parameters, not source-code constants.
+Both camera nodes publish stamped frames and reconnect automatically when a
+stream drops. Verify both cameras first without ROS:
+
+```bash
+python3 scripts/check_cameras.py --probe 4          # find webcam indices
+python3 scripts/check_cameras.py \
+  --workspace-url http://PHONE:8080/video --gaze-index 0
+```
+
+See [docs/setup.md](docs/setup.md) and [docs/calibration.md](docs/calibration.md).
 
 ## Training
 
-Training is separate from ROS runtime code. See
+Training is separate from ROS runtime code. Install `requirements-train.txt`
+(runtime set plus torch and modal) for `training/` scripts only. See
 [docs/model_training.md](docs/model_training.md) for collection, preparation,
 training, and evaluation commands.
 
 ## Packages
 
 `assistant_msgs` owns interfaces; `assistant_perception` owns camera, detection,
-mapping, and calibration; `assistant_interaction` owns gaze and temporal target
-selection; `assistant_motion` owns guarded grasp execution and arm I/O;
-`assistant_bringup` owns launch and configuration.
+mapping, and calibration; `assistant_interaction` owns gaze, voice input from the phone microphone
+([docs/voice.md](docs/voice.md)), and temporal target selection; `assistant_motion` owns guarded grasp execution and arm I/O;
+`assistant_bringup` owns launch and configuration. The arm protocol and bring-up
+steps are in [docs/arm.md](docs/arm.md); the Arduino sketch is in `firmware/`.
 
 ## Verification
 
