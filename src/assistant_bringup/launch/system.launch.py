@@ -9,6 +9,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
@@ -35,7 +36,7 @@ def generate_launch_description() -> LaunchDescription:
             output="screen",
             parameters=[config["system.yaml"]]
             + [config[item] for item in parameters]
-            + [{"mock_mode": LaunchConfiguration("mock_mode")}]
+            + [ParameterValue(LaunchConfiguration("mock_mode"), value_type=bool)]
             + (overrides or []),
         )
 
@@ -44,12 +45,17 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("mock_mode", default_value="true"),
             DeclareLaunchArgument("workspace_camera_url", default_value=""),
             DeclareLaunchArgument("gaze_camera_index", default_value="0"),
+            DeclareLaunchArgument("gaze_camera_backend", default_value="auto"),
             node(
                 "assistant_perception",
                 "workspace_camera_node",
                 "workspace_camera_node",
                 ["cameras.yaml"],
-                [{"camera_url": LaunchConfiguration("workspace_camera_url")}],
+                [
+                    ParameterValue(
+                        LaunchConfiguration("workspace_camera_url"), value_type=str
+                    )
+                ],
             ),
             node(
                 "assistant_perception",
@@ -74,7 +80,14 @@ def generate_launch_description() -> LaunchDescription:
                 "gaze_camera_node",
                 "gaze_camera_node",
                 ["cameras.yaml"],
-                [{"gaze_camera_index": LaunchConfiguration("gaze_camera_index")}],
+                [
+                    ParameterValue(
+                        LaunchConfiguration("gaze_camera_index"), value_type=int
+                    ),
+                    ParameterValue(
+                        LaunchConfiguration("gaze_camera_backend"), value_type=str
+                    ),
+                ],
             ),
             node(
                 "assistant_interaction",
