@@ -10,3 +10,5 @@ selection_manager_node:
     minimum_gaze_confidence: 0.8
     maximum_gaze_object_distance: 0.15
     minimum_detection_confidence: 0.7
+    # After a voice command, ignore gaze selections for this long.
+    voice_priority_seconds: 5.0
