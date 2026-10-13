@@ -67,5 +67,5 @@ PYTHONPATH=src/assistant_perception:src/assistant_interaction:src/assistant_moti
 python3 -m flake8 src/assistant_perception/assistant_perception src/assistant_interaction/assistant_interaction src/assistant_motion/assistant_motion training
 ```
 
-See [docs/development.md](docs/development.md) for the CI and hardware-free
-workflow.
+See [docs/development.md](docs/development.md) for the hardware-free
+development workflow.

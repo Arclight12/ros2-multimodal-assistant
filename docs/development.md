@@ -8,9 +8,9 @@ python3 -m flake8 src/assistant_perception/assistant_perception src/assistant_in
 colcon build --symlink-install
 ```
 
-The CI workflow repeats linting, YAML/XML/interface checks, ROS build and test,
-launch syntax compilation, and unit tests. It never trains models or requires
-hardware. Keep ROS callbacks thin and put geometry, selection, and safety rules
+Before pushing, run `flake8` on the packages and `training`, `colcon build`,
+and the hardware-free `pytest tests` suite. None of these train models or
+require hardware. Keep ROS callbacks thin and put geometry, selection, and safety rules
 in pure modules so they remain testable on any machine.
 
 Use feature branches and small commits. Never commit datasets, model weights,
