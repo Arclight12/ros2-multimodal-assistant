@@ -1,12 +1,22 @@
 motion_planner_node:
   ros__parameters:
-    moveit_enabled: false
-    robot_reach_min_m: 0.05
-    robot_reach_max_m: 0.6
+    # Real motion is refused unless this is true (and mock_mode is false).
+    motion_enabled: false
     detection_timeout_seconds: 1.0
-    pregrasp_offset_m: 0.08
+    pregrasp_offset_m: 0.04
+    arm_command_timeout_s: 15.0
+    # Arm geometry in metres. Placeholders from the URDF: MEASURE YOUR ARM.
+    arm_shoulder_height_m: 0.035
+    arm_upper_arm_m: 0.10
+    arm_forearm_m: 0.08
+    arm_gripper_m: 0.11
 
 arm_controller_node:
   ros__parameters:
+    # Pi: usually /dev/ttyACM0 (user must be in the dialout group).
     serial_port: ""
     baudrate: 115200
+    # servo_deg = offset + sign * degrees(joint_angle); order:
+    # base, shoulder, elbow, wrist. Calibrate with the arm unloaded.
+    servo_offsets_deg: [90.0, 90.0, 90.0, 90.0]
+    servo_signs: [1.0, 1.0, 1.0, 1.0]

@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 import json
+import threading
+import time
 from typing import Any
 
 import rclpy
 from rclpy.action import ActionServer
+from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from std_msgs.msg import String
 
 from assistant_msgs.action import ExecuteGrasp
 from assistant_msgs.msg import DetectedObjectArray, ObjectSelection
 
+from .arm_kinematics import ArmGeometry, solve_ik
 from .grasp_safety import GraspSafetyState, validate_real_grasp
-from .workspace_checks import reachable, valid_pose
+from .workspace_checks import valid_pose
 
 
 class MotionPlannerNode(Node):
@@ -23,16 +28,22 @@ class MotionPlannerNode(Node):
     def __init__(self) -> None:
         super().__init__("motion_planner_node")
         self.declare_parameter("mock_mode", True)
-        self.declare_parameter("moveit_enabled", False)
+        self.declare_parameter("motion_enabled", False)
         self.declare_parameter("workspace_width_m", 0.4)
         self.declare_parameter("workspace_height_m", 0.3)
-        self.declare_parameter("robot_reach_min_m", 0.05)
-        self.declare_parameter("robot_reach_max_m", 0.6)
         self.declare_parameter("detection_timeout_seconds", 1.0)
-        self.declare_parameter("pregrasp_offset_m", 0.08)
+        self.declare_parameter("pregrasp_offset_m", 0.04)
+        self.declare_parameter("arm_command_timeout_s", 15.0)
+        defaults = ArmGeometry()
+        self.declare_parameter(
+            "arm_shoulder_height_m", defaults.shoulder_height_m
+        )
+        self.declare_parameter("arm_upper_arm_m", defaults.upper_arm_m)
+        self.declare_parameter("arm_forearm_m", defaults.forearm_m)
+        self.declare_parameter("arm_gripper_m", defaults.gripper_m)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
-        self._moveit_enabled = bool(
-            self.get_parameter("moveit_enabled").value
+        self._motion_enabled = bool(
+            self.get_parameter("motion_enabled").value
         )
         self._workspace_width = float(
             self.get_parameter("workspace_width_m").value
@@ -40,14 +51,28 @@ class MotionPlannerNode(Node):
         self._workspace_height = float(
             self.get_parameter("workspace_height_m").value
         )
-        self._reach_min = float(self.get_parameter("robot_reach_min_m").value)
-        self._reach_max = float(self.get_parameter("robot_reach_max_m").value)
         self._detection_timeout = float(
             self.get_parameter("detection_timeout_seconds").value
         )
         self._pregrasp_offset = float(
             self.get_parameter("pregrasp_offset_m").value
         )
+        self._command_timeout = float(
+            self.get_parameter("arm_command_timeout_s").value
+        )
+        self._geometry = ArmGeometry(
+            shoulder_height_m=float(
+                self.get_parameter("arm_shoulder_height_m").value
+            ),
+            upper_arm_m=float(self.get_parameter("arm_upper_arm_m").value),
+            forearm_m=float(self.get_parameter("arm_forearm_m").value),
+            gripper_m=float(self.get_parameter("arm_gripper_m").value),
+        )
+        self._command_id = 0
+        self._done: set[str] = set()
+        self._done_cond = threading.Condition()
+        # Reentrant so /arm/done is handled while a grasp action blocks.
+        self._group = ReentrantCallbackGroup()
         self._detections: DetectedObjectArray | None = None
         self._selection: ObjectSelection | None = None
         self._hardware_available = False
@@ -67,13 +92,25 @@ class MotionPlannerNode(Node):
             10,
         )
         self._status_subscription = self.create_subscription(
-            String, "/arm/status", self._on_arm_status, 10
+            String,
+            "/arm/status",
+            self._on_arm_status,
+            10,
+            callback_group=self._group,
+        )
+        self._done_subscription = self.create_subscription(
+            String,
+            "/arm/done",
+            self._on_arm_done,
+            10,
+            callback_group=self._group,
         )
         self._action_server = ActionServer(
             self,
             ExecuteGrasp,
             "/execute_grasp",
             self._execute_grasp_callback,
+            callback_group=self._group,
         )
 
     def _on_detections(self, message: DetectedObjectArray) -> None:
@@ -87,6 +124,12 @@ class MotionPlannerNode(Node):
     def _on_arm_status(self, message: String) -> None:
         """Update hardware availability from the isolated arm node."""
         self._hardware_available = message.data == "available"
+
+    def _on_arm_done(self, message: String) -> None:
+        """Wake the grasp sequence when the arm acknowledges a command."""
+        with self._done_cond:
+            self._done.add(message.data)
+            self._done_cond.notify_all()
 
     def _execute_grasp_callback(
         self, goal_handle: Any
@@ -104,6 +147,7 @@ class MotionPlannerNode(Node):
 
         self._feedback(goal_handle, "validating")
         pose = self._pose_tuple(detection, goal)
+        stages = self._plan_stages(pose) if valid_pose(pose) else None
         state = GraspSafetyState(
             mock_mode=False,
             workspace_calibrated=bool(
@@ -118,10 +162,9 @@ class MotionPlannerNode(Node):
             ),
             target_pose_valid=valid_pose(pose),
             target_in_workspace=self._within_workspace(detection),
-            target_reachable=valid_pose(pose)
-            and reachable(pose, self._reach_min, self._reach_max),
+            target_reachable=stages is not None,
             hardware_available=self._hardware_available,
-            moveit_enabled=self._moveit_enabled,
+            motion_enabled=self._motion_enabled,
         )
         decision = validate_real_grasp(state)
         if not decision.allowed:
@@ -129,26 +172,15 @@ class MotionPlannerNode(Node):
                 goal_handle, f"refusing real grasp: {decision.reason}"
             )
 
-        stages = (
-            ("planning", {"command": "plan", "object_id": goal.object_id}),
-            ("moving_to_pregrasp", {"command": "move_to", "pose": pose}),
-            (
-                "approaching",
-                {"command": "move_to", "pose": self._lowered_pose(pose)},
-            ),
-            ("closing_gripper", {"command": "close_gripper"}),
-            (
-                "lifting",
-                {"command": "move_to", "pose": self._lifted_pose(pose)},
-            ),
-            ("returning", {"command": "home"}),
-        )
+        self._done.clear()
         for stage, command in stages:
             if goal_handle.is_cancel_requested:
                 goal_handle.canceled()
                 return self._result(False, "grasp canceled")
             self._feedback(goal_handle, stage)
-            self._publish_command(command)
+            error = self._send_and_wait(command)
+            if error:
+                return self._abort(goal_handle, f"{stage} failed: {error}")
         self._feedback(goal_handle, "complete")
         goal_handle.succeed()
         return self._result(True, f"Grasp of '{goal.object_id}' completed.")
@@ -159,7 +191,7 @@ class MotionPlannerNode(Node):
         """Exercise every grasp stage without publishing hardware commands."""
         for stage in (
             "validating",
-            "planning",
+            "opening_gripper",
             "moving_to_pregrasp",
             "approaching",
             "closing_gripper",
@@ -220,13 +252,50 @@ class MotionPlannerNode(Node):
             and 0.0 <= detection.workspace_center.y <= self._workspace_height
         )
 
-    def _lowered_pose(self, pose):
-        """Return the target pose used for the final approach."""
-        return (pose[0], pose[1], pose[2] - self._pregrasp_offset)
+    def _plan_stages(self, pose) -> list[tuple[str, dict]] | None:
+        """Solve IK for every waypoint up front; None if any is unreachable."""
+        above = (pose[0], pose[1], pose[2] + self._pregrasp_offset)
+        pregrasp = solve_ik(*above, geometry=self._geometry)
+        grasp = solve_ik(*pose, geometry=self._geometry)
+        if pregrasp is None or grasp is None:
+            return None
 
-    def _lifted_pose(self, pose):
-        """Return the target pose used after closing the gripper."""
-        return (pose[0], pose[1], pose[2] + self._pregrasp_offset)
+        def move(angles) -> dict:
+            return {
+                "command": "move_joints",
+                "angles": [
+                    angles.base,
+                    angles.shoulder,
+                    angles.elbow,
+                    angles.wrist,
+                ],
+            }
+
+        return [
+            ("opening_gripper", {"command": "open_gripper"}),
+            ("moving_to_pregrasp", move(pregrasp)),
+            ("approaching", move(grasp)),
+            ("closing_gripper", {"command": "close_gripper"}),
+            ("lifting", move(pregrasp)),
+            ("returning", {"command": "home"}),
+        ]
+
+    def _send_and_wait(self, command: dict) -> str | None:
+        """Publish one arm command; return an error, or None once acked."""
+        self._command_id += 1
+        command_id = str(self._command_id)
+        self._publish_command({**command, "id": self._command_id})
+        deadline = time.monotonic() + self._command_timeout
+        with self._done_cond:
+            while True:
+                if command_id in self._done:
+                    return None
+                if f"{command_id}:error" in self._done:
+                    return "arm rejected the command"
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    return "arm did not acknowledge in time"
+                self._done_cond.wait(remaining)
 
     def _publish_command(self, command: dict) -> None:
         """Send a hardware-neutral command to the arm adapter."""
@@ -257,8 +326,10 @@ def main(args: list[str] | None = None) -> None:
     """Run the motion planner node."""
     rclpy.init(args=args)
     node = MotionPlannerNode()
+    executor = MultiThreadedExecutor()
+    executor.add_node(node)
     try:
-        rclpy.spin(node)
+        executor.spin()
     except KeyboardInterrupt:
         pass
     finally:

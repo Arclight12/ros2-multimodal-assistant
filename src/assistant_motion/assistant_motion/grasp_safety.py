@@ -16,7 +16,7 @@ class GraspSafetyState:
     target_in_workspace: bool
     target_reachable: bool
     hardware_available: bool
-    moveit_enabled: bool
+    motion_enabled: bool
 
 
 @dataclass(frozen=True)
@@ -37,7 +37,7 @@ def validate_real_grasp(state: GraspSafetyState) -> SafetyDecision:
         (not state.target_in_workspace, "target is outside workspace bounds"),
         (not state.target_reachable, "target is unreachable"),
         (not state.hardware_available, "robot hardware is unavailable"),
-        (not state.moveit_enabled, "MoveIt execution is disabled"),
+        (not state.motion_enabled, "real motion is disabled"),
     )
     for failed, reason in checks:
         if failed:
