@@ -13,11 +13,8 @@ training/
   object_detection/        collection, preparation, train, evaluate
 datasets/                   git-ignored collected data
 models/                    git-ignored exported weights
-tests/                     hardware-free unit tests
-scripts/                   environment, camera and voice diagnostics
-  check_voice.py           phone microphone and Vosk grammar check (no ROS)
+scripts/                   environment/camera diagnostics, Pi setup and launch (setup_pi.sh, pi_launch.sh), laptop webcam stream
 docs/                      contracts, setup, calibration, training, arm
-  voice.md                 voice input: phone microphone, Vosk, aliases
 requirements-train.txt     training-only dependencies (torch, modal)
 ```
 

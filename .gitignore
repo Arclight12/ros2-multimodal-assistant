@@ -20,9 +20,9 @@ __pycache__/
 venv/
 env/
 
-# --- Model data (weights, Vosk model dirs, graphs) ---
+# --- Model data (weights, graphs) ---
 # Everything placed under models/ is treated as runtime-fetched data and is
-# NOT committed (Vosk model folders, .pt/.pth/.onnx/.tflite weights, etc.).
+# NOT committed (.pt/.pth/.onnx/.tflite weights, etc.).
 # A placeholder keeps the directory itself trackable.
 models/*
 !models/.gitkeep
@@ -68,3 +68,4 @@ rosbag2_*/
 # --- Colcon / ament artifacts ---
 .cache/
 colcon_ws_*/
+/flow.jpg

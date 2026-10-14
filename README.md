@@ -55,15 +55,13 @@ training, and evaluation commands.
 ## Packages
 
 `assistant_msgs` owns interfaces; `assistant_perception` owns camera, detection,
-mapping, and calibration; `assistant_interaction` owns gaze, voice input from the phone microphone
-([docs/voice.md](docs/voice.md)), and temporal target selection; `assistant_motion` owns guarded grasp execution and arm I/O;
+mapping, and calibration; `assistant_interaction` owns gaze and temporal target selection; `assistant_motion` owns guarded grasp execution and arm I/O;
 `assistant_bringup` owns launch and configuration. The arm protocol and bring-up
 steps are in [docs/arm.md](docs/arm.md); the Arduino sketch is in `firmware/`.
 
 ## Verification
 
 ```bash
-PYTHONPATH=src/assistant_perception:src/assistant_interaction:src/assistant_motion python3 -m pytest -q tests
 python3 -m flake8 src/assistant_perception/assistant_perception src/assistant_interaction/assistant_interaction src/assistant_motion/assistant_motion training
 ```
 

@@ -13,7 +13,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
-    """Return the ten-node mock-safe system launch description."""
+    """Return the nine-node mock-safe system launch description."""
     bringup_dir = get_package_share_directory("assistant_bringup")
     config_dir = os.path.join(bringup_dir, "config")
     config = {
@@ -25,7 +25,6 @@ def generate_launch_description() -> LaunchDescription:
             "gaze.yaml",
             "workspace.yaml",
             "robot.yaml",
-            "voice.yaml",
         )
     }
 
@@ -37,7 +36,13 @@ def generate_launch_description() -> LaunchDescription:
             output="screen",
             parameters=[config["system.yaml"]]
             + [config[item] for item in parameters]
-            + [ParameterValue(LaunchConfiguration("mock_mode"), value_type=bool)]
+            + [
+                {
+                    "mock_mode": ParameterValue(
+                        LaunchConfiguration("mock_mode"), value_type=bool
+                    )
+                }
+            ]
             + (overrides or []),
         )
 
@@ -46,17 +51,20 @@ def generate_launch_description() -> LaunchDescription:
             DeclareLaunchArgument("mock_mode", default_value="true"),
             DeclareLaunchArgument("workspace_camera_url", default_value=""),
             DeclareLaunchArgument("gaze_camera_index", default_value="0"),
+            DeclareLaunchArgument("gaze_camera_device", default_value=""),
             DeclareLaunchArgument("gaze_camera_backend", default_value="auto"),
-            DeclareLaunchArgument("voice_stream_url", default_value=""),
             node(
                 "assistant_perception",
                 "workspace_camera_node",
                 "workspace_camera_node",
                 ["cameras.yaml"],
                 [
-                    ParameterValue(
-                        LaunchConfiguration("workspace_camera_url"), value_type=str
-                    )
+                    {
+                        "camera_url": ParameterValue(
+                            LaunchConfiguration("workspace_camera_url"),
+                            value_type=str,
+                        )
+                    }
                 ],
             ),
             node(
@@ -83,12 +91,20 @@ def generate_launch_description() -> LaunchDescription:
                 "gaze_camera_node",
                 ["cameras.yaml"],
                 [
-                    ParameterValue(
-                        LaunchConfiguration("gaze_camera_index"), value_type=int
-                    ),
-                    ParameterValue(
-                        LaunchConfiguration("gaze_camera_backend"), value_type=str
-                    ),
+                    {
+                        "gaze_camera_index": ParameterValue(
+                            LaunchConfiguration("gaze_camera_index"),
+                            value_type=int,
+                        ),
+                        "gaze_camera_device": ParameterValue(
+                            LaunchConfiguration("gaze_camera_device"),
+                            value_type=str,
+                        ),
+                        "gaze_camera_backend": ParameterValue(
+                            LaunchConfiguration("gaze_camera_backend"),
+                            value_type=str,
+                        ),
+                    }
                 ],
             ),
             node(
@@ -96,17 +112,6 @@ def generate_launch_description() -> LaunchDescription:
                 "gaze_estimation_node",
                 "gaze_estimation_node",
                 ["gaze.yaml"],
-            ),
-            node(
-                "assistant_interaction",
-                "voice_node",
-                "voice_node",
-                ["voice.yaml"],
-                [
-                    ParameterValue(
-                        LaunchConfiguration("voice_stream_url"), value_type=str
-                    )
-                ],
             ),
             node(
                 "assistant_interaction",

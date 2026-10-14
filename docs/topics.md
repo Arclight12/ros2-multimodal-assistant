@@ -11,7 +11,6 @@
 | `/workspace_status` | `std_msgs/String` | calibration/scan status |
 | `/arm/status` | `std_msgs/String` | arm availability/status |
 | `/arm/command` | `std_msgs/String` | internal abstract arm command |
-| `/voice/object_id` | `std_msgs/String` | voice_node -> selection_manager_node: spoken object class |
 
 `DetectedObject` carries a stable ID, class, confidence, image center, and an
 optional pose. The detector publishes image centers; the mapper fills pose only

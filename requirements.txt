@@ -4,17 +4,16 @@
 
 # --- Perception (ArUco workspace mapping, YOLO detection) ---
 numpy
-opencv-contrib-python
+opencv-contrib-python<5
 # NOTE: `opencv-python` is intentionally NOT listed. `opencv-contrib-python`
 # is a superset that also provides the ArUco modules; installing both wheels
-# is redundant and can conflict.
+# is redundant and can conflict. Kept below 5 to match ROS's apt cv_bridge
+# (built against OpenCV 4).
 
 # --- Interaction: gaze (MediaPipe FaceMesh) ---
-# Pinned: MediaPipe 1.x removed the `mp.solutions` API the gaze node uses.
-mediapipe==0.10.21
-
-# --- Interaction: voice (Vosk offline speech recognition) ---
-vosk
+# Below 1.0: MediaPipe 1.x removed the `mp.solutions` API the gaze node uses.
+# A range, not a pin: aarch64 (Raspberry Pi) wheels stop at 0.10.18.
+mediapipe>=0.10.13,<0.11
 
 # --- Perception (YOLO26n via Ultralytics) ---
 # Ultralytics depends on torch, so torch is installed here as a transitive dependency.

@@ -45,14 +45,6 @@ backend `dshow`, on Linux `v4l2`:
 python3 scripts/check_cameras.py --probe 4
 ```
 
-### Voice (phone microphone)
-
-The phone's IP Webcam app also serves audio at `http://<phone-ip>:8080/audio.wav`,
-which feeds the offline Vosk recogniser. Install the Vosk model into
-`models/voice/` and check it without ROS with
-`python3 scripts/check_voice.py --url http://<phone-ip>:8080/audio.wav`.
-Setup, phrases and launch options are in [voice.md](voice.md).
-
 ### Verify cameras without ROS
 
 Run the diagnostics before launching the graph; it opens each camera with the
@@ -93,8 +85,11 @@ arm firmware (see [arm.md](arm.md)).
 
 ## Raspberry Pi
 
-Target: Raspberry Pi 4 or 5 with 64-bit Ubuntu 24.04 and ROS 2 Jazzy. Install
-the steps above unchanged, then:
+Target: Raspberry Pi 4 or 5 with **Ubuntu Server 24.04 (64-bit)**. Raspberry Pi
+OS and other Debian releases are not supported: ROS 2 Jazzy has no packages for
+them. On a fresh Ubuntu 24.04 install, `bash scripts/setup_pi.sh` installs ROS 2
+Jazzy, the Python dependencies in a venv and serial access, then
+builds the workspace; it refuses to run on any other OS. Notes:
 
 - `requirements.txt` is the runtime set. Do not install `requirements-train.txt`
   on the Pi. Ultralytics still pulls in torch as a dependency.

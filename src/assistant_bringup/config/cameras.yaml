@@ -10,7 +10,7 @@
 # stream without starting ROS.
 workspace_camera_node:
   ros__parameters:
-    camera_url: ""
+    # camera_url comes from the workspace_camera_url launch argument; a value here would override it.
     camera_frame_id: "workspace_camera"
     camera_fps: 10.0
     # FFMPEG open/read timeouts keep a dead stream from blocking the node.
@@ -27,9 +27,8 @@ workspace_camera_node:
 # height of 0 keep the driver default resolution.
 gaze_camera_node:
   ros__parameters:
-    gaze_camera_index: 0
-    gaze_camera_device: ""
-    gaze_camera_backend: "auto"
+    # gaze_camera_index / gaze_camera_device / gaze_camera_backend come from launch arguments
+    # (node defaults: 0, "", "auto"); a value here would override them.
     gaze_camera_width: 0
     gaze_camera_height: 0
     gaze_camera_frame_id: "gaze_camera"

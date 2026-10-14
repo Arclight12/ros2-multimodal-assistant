@@ -19,8 +19,7 @@ requested.
 Perception continuously publishes detections. Gaze is direct normalized
 workspace regression, not arbitrary monocular depth. Selection chooses the
 nearest valid detection and requires confidence, distance, and temporal hold
-criteria. Voice (phone microphone, offline Vosk) names an object class
-and overrides gaze for a short window. Motion uses the live selected object
+criteria. Motion uses the live selected object
 and refuses real execution when calibration, pose, bounds, reachability (IK),
 hardware, enabled state, or selection state is unsafe. Mock mode is deterministic and never moves hardware.
 

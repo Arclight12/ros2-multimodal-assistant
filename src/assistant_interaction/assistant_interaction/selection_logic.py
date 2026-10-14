@@ -37,8 +37,8 @@ class SelectionConfig:
     """Thresholds used for one-frame filtering."""
 
     minimum_gaze_confidence: float = 0.8
-    minimum_detection_confidence: float = 0.7
-    maximum_gaze_object_distance: float = 0.15
+    minimum_detection_confidence: float = 0.55
+    maximum_gaze_object_distance: float = 0.2
 
 
 @dataclass(frozen=True)
@@ -88,31 +88,26 @@ def nearest_valid_detection(
     return nearest
 
 
-def select_by_class(
-    class_name: str,
-    detections: Iterable[DetectionObservation],
-    config: SelectionConfig,
-) -> DetectionObservation | None:
-    """Return the most confident valid detection of a spoken class."""
-    matches = [
-        detection
-        for detection in detections
-        if detection.object_id
-        and detection.class_name == class_name
-        and math.isfinite(detection.confidence)
-        and detection.confidence >= config.minimum_detection_confidence
-    ]
-    return max(matches, key=lambda item: item.confidence, default=None)
-
-
 class TemporalSelector:
-    """Confirm one candidate after it remains stable for a hold duration."""
+    """Confirm one candidate after it stays stable for a hold duration.
 
-    def __init__(self, hold_seconds: float) -> None:
-        """Create a selector with a non-negative hold duration."""
+    Gaze is noisy, so a candidate may drop out for up to ``grace_seconds``
+    (a jittery frame, a missed detection) without restarting the hold.
+    """
+
+    def __init__(self, hold_seconds: float, grace_seconds: float = 0.5) -> None:
+        """Create a selector with non-negative hold and grace durations."""
         self._hold_seconds = max(0.0, float(hold_seconds))
+        self._grace_seconds = max(0.0, float(grace_seconds))
         self._candidate_id: str | None = None
-        self._candidate_started: float | None = None
+        self._candidate_started = 0.0
+        self._last_seen = 0.0
+        self._published = False
+
+    def _restart(self, candidate_id: str | None, now: float) -> None:
+        self._candidate_id = candidate_id
+        self._candidate_started = now
+        self._last_seen = now
         self._published = False
 
     def update(
@@ -120,14 +115,20 @@ class TemporalSelector:
     ) -> SelectionCandidate | DetectionObservation | None:
         """Update the current candidate and return a newly confirmed target."""
         candidate_id = getattr(candidate, "object_id", None)
-        if candidate_id != self._candidate_id:
-            self._candidate_id = candidate_id
-            self._candidate_started = now if candidate_id is not None else None
-            self._published = False
+        if candidate_id is None:
+            if (
+                self._candidate_id is not None
+                and now - self._last_seen > self._grace_seconds
+            ):
+                self._restart(None, now)
             return None
-        if candidate is None or self._candidate_started is None:
-            return None
-        if now - self._candidate_started < self._hold_seconds or self._published:
+        if (
+            candidate_id != self._candidate_id
+            or now - self._last_seen > self._grace_seconds
+        ):
+            self._restart(candidate_id, now)
+        self._last_seen = now
+        if self._published or now - self._candidate_started < self._hold_seconds:
             return None
         self._published = True
         return candidate

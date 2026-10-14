@@ -36,12 +36,17 @@ class GazeEstimationNode(Node):
         super().__init__("gaze_estimation_node")
         self.declare_parameter("gaze_model_path", "")
         self.declare_parameter("minimum_gaze_confidence", 0.6)
+        self.declare_parameter("gaze_smoothing", 0.3)
         self.declare_parameter("mock_mode", True)
         self.declare_parameter("mock_gaze_fps", 5.0)
         self._model_path = str(self.get_parameter("gaze_model_path").value)
         self._minimum_confidence = float(
             self.get_parameter("minimum_gaze_confidence").value
         )
+        self._smoothing = min(
+            1.0, max(0.05, float(self.get_parameter("gaze_smoothing").value))
+        )
+        self._smoothed: tuple[float, float] | None = None
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
         self._publisher = self.create_publisher(GazePoint, "/gaze/point", 10)
         self._bridge = CvBridge() if CvBridge is not None else None
@@ -92,9 +97,7 @@ class GazeEstimationNode(Node):
                 refine_landmarks=True,
             )
         except Exception as exc:  # noqa: BLE001 - optional model boundary
-            self.get_logger().error(
-                f"Failed to initialize face landmark model: {exc}"
-            )
+            self.get_logger().error(f"Failed to initialize face landmark model: {exc}")
             return None
 
     def _publish_mock_gaze(self) -> None:
@@ -120,13 +123,15 @@ class GazeEstimationNode(Node):
                 self._publish_invalid(image)
                 return
             features = landmark_features(result.multi_face_landmarks[0].landmark)
-            prediction = self._model(
-                torch.tensor([features], dtype=torch.float32)
-            )[0].tolist()
-            x, y = (
-                max(0.0, min(1.0, float(value)))
-                for value in prediction[:2]
-            )
+            prediction = self._model(torch.tensor([features], dtype=torch.float32))[
+                0
+            ].tolist()
+            x, y = (max(0.0, min(1.0, float(value))) for value in prediction[:2])
+            if self._smoothed is not None and math.isfinite(x + y):
+                alpha = self._smoothing
+                x = self._smoothed[0] + alpha * (x - self._smoothed[0])
+                y = self._smoothed[1] + alpha * (y - self._smoothed[1])
+            self._smoothed = (x, y) if math.isfinite(x + y) else None
             message = GazePoint()
             message.header = image.header
             message.x = x
@@ -140,6 +145,7 @@ class GazeEstimationNode(Node):
 
     def _publish_invalid(self, image: Image) -> None:
         """Tell fusion that the current frame has no usable gaze estimate."""
+        self._smoothed = None
         message = GazePoint()
         message.header = image.header
         message.valid = False
