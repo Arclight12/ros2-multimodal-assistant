@@ -80,9 +80,7 @@ def _two_link(
     upper = geometry.upper_arm_m
     forearm = geometry.forearm_m
     reach_sq = wrist_r * wrist_r + wrist_z * wrist_z
-    cos_elbow = (reach_sq - upper * upper - forearm * forearm) / (
-        2.0 * upper * forearm
-    )
+    cos_elbow = (reach_sq - upper * upper - forearm * forearm) / (2.0 * upper * forearm)
     if abs(cos_elbow) > 1.0:
         return None
     elbow = -math.acos(cos_elbow)

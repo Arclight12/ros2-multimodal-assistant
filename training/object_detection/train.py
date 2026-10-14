@@ -22,8 +22,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default=None)
     parser.add_argument("--exist-ok", action="store_true")
     parser.add_argument(
-        "--output", type=Path,
-        default=Path("models/object_detection/object_detector.pt")
+        "--output",
+        type=Path,
+        default=Path("models/object_detection/object_detector.pt"),
     )
     return parser
 

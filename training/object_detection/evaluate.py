@@ -16,7 +16,9 @@ def main() -> None:
     try:
         from ultralytics import YOLO
     except ImportError as exc:
-        raise SystemExit("Install ultralytics to evaluate the object detector.") from exc
+        raise SystemExit(
+            "Install ultralytics to evaluate the object detector."
+        ) from exc
     metrics = YOLO(str(args.model)).val(data=str(args.data), imgsz=args.image_size)
     print(metrics)
 

@@ -34,7 +34,9 @@ def extract_person(person_dir: Path, stride: int = 1):
         if values is None:
             continue
         features.append(values)
-        targets.append(np.clip(np.asarray(fields[1:3], dtype=np.float32) / size, 0.0, 1.0))
+        targets.append(
+            np.clip(np.asarray(fields[1:3], dtype=np.float32) / size, 0.0, 1.0)
+        )
     face_mesh.close()
     print(f"{person_dir.name}: kept {len(features)}/{len(rows)}", flush=True)
     return features, targets
@@ -43,11 +45,16 @@ def extract_person(person_dir: Path, stride: int = 1):
 def main() -> None:
     """Extract features for every participant and write one NPZ."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, required=True,
-                        help="extracted MPIIFaceGaze directory (contains p00..p14)")
+    parser.add_argument(
+        "--root",
+        type=Path,
+        required=True,
+        help="extracted MPIIFaceGaze directory (contains p00..p14)",
+    )
     parser.add_argument("--output", type=Path, required=True)
-    parser.add_argument("--stride", type=int, default=1,
-                        help="keep every Nth image of each participant")
+    parser.add_argument(
+        "--stride", type=int, default=1, help="keep every Nth image of each participant"
+    )
     args = parser.parse_args()
     features, targets = [], []
     # Sorted participants keep subjects contiguous, so train.py's sequential

@@ -12,9 +12,7 @@ from pathlib import Path
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--camera-index", type=int, default=0)
-    parser.add_argument(
-        "--output", type=Path, default=Path("datasets/gaze/raw")
-    )
+    parser.add_argument("--output", type=Path, default=Path("datasets/gaze/raw"))
     parser.add_argument("--grid-size", type=int, default=5)
     parser.add_argument("--frames-per-point", type=int, default=10)
     parser.add_argument("--prepare-seconds", type=float, default=1.0)
@@ -29,13 +27,9 @@ def main() -> None:
     try:
         import cv2
     except ImportError as exc:
-        raise SystemExit(
-            "Install opencv-contrib-python to collect gaze data."
-        ) from exc
+        raise SystemExit("Install opencv-contrib-python to collect gaze data.") from exc
     if args.grid_size < 2 or args.frames_per_point < 1:
-        raise SystemExit(
-            "grid-size must be at least 2 and frames-per-point positive"
-        )
+        raise SystemExit("grid-size must be at least 2 and frames-per-point positive")
     capture = cv2.VideoCapture(args.camera_index)
     if not capture.isOpened():
         raise SystemExit(f"Unable to open webcam index {args.camera_index}")
@@ -85,9 +79,7 @@ def main() -> None:
                                 "session": args.session,
                                 "lighting": args.lighting,
                                 "head_position": "self-selected",
-                                "captured_at": datetime.now(
-                                    timezone.utc
-                                ).isoformat(),
+                                "captured_at": datetime.now(timezone.utc).isoformat(),
                             }
                         )
                         + "\n"

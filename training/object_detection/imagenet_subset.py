@@ -117,8 +117,7 @@ def parse_annotation(path: Path, mapping: ClassMapping) -> Annotation:
             continue
         coordinates = item.find("bndbox")
         values = tuple(
-            _number(coordinates, field)
-            for field in ("xmin", "ymin", "xmax", "ymax")
+            _number(coordinates, field) for field in ("xmin", "ymin", "xmax", "ymax")
         )
         if any(value is None for value in values):
             continue
@@ -139,8 +138,7 @@ def to_yolo_line(box: Box, width: int, height: int) -> str | None:
     box_width = (xmax - xmin) / width
     box_height = (ymax - ymin) / height
     return (
-        f"{box.class_id} {center_x:.6f} {center_y:.6f} "
-        f"{box_width:.6f} {box_height:.6f}"
+        f"{box.class_id} {center_x:.6f} {center_y:.6f} {box_width:.6f} {box_height:.6f}"
     )
 
 
@@ -233,7 +231,9 @@ def prepare_dataset(
     if not records:
         raise ValueError("no selected images with valid boxes were found")
 
-    validation_count = max(1, int(len(records) * validation_fraction)) if len(records) > 1 else 0
+    validation_count = (
+        max(1, int(len(records) * validation_fraction)) if len(records) > 1 else 0
+    )
     validation = set(range(validation_count))
     class_counts = {name: 0 for name in mapping.names}
     for record in records:

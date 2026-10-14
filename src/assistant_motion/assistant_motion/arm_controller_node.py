@@ -39,16 +39,12 @@ class ArmControllerNode(Node):
         self._offsets = [
             float(v) for v in self.get_parameter("servo_offsets_deg").value
         ]
-        self._signs = [
-            float(v) for v in self.get_parameter("servo_signs").value
-        ]
+        self._signs = [float(v) for v in self.get_parameter("servo_signs").value]
         self._serial = None
         self._status = "unavailable"
         self._opened_at = 0.0
         self._pending: deque = deque()
-        self._status_publisher = self.create_publisher(
-            String, "/arm/status", 10
-        )
+        self._status_publisher = self.create_publisher(String, "/arm/status", 10)
         self._done_publisher = self.create_publisher(String, "/arm/done", 10)
         self._subscription = self.create_subscription(
             String, "/arm/command", self._on_command, 10
@@ -72,9 +68,7 @@ class ArmControllerNode(Node):
             )
             return
         if not self._serial_port:
-            self.get_logger().error(
-                "serial_port is empty; arm hardware is disabled."
-            )
+            self.get_logger().error("serial_port is empty; arm hardware is disabled.")
             return
         try:
             self._serial = serial.Serial(
@@ -101,9 +95,7 @@ class ArmControllerNode(Node):
             self._publish_done(command_id, ok=True)
             return
         if self._status != "available":
-            self.get_logger().error(
-                "Rejected arm command: hardware is unavailable."
-            )
+            self.get_logger().error("Rejected arm command: hardware is unavailable.")
             self._publish_done(command_id, ok=False)
             return
         self._pending.append(command_id)

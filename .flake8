@@ -15,3 +15,5 @@ extend-ignore =
     I101,
     # Single-vs-double quote preference (Q plugin) is stylistic only.
     Q000,
+    # Slice spacing as emitted by the formatter.
+    E203,

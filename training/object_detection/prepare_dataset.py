@@ -20,9 +20,7 @@ def main() -> None:
     parser.add_argument("--seed", type=int, default=7)
     args = parser.parse_args()
     class_names = [
-        line.strip()
-        for line in args.classes.read_text().splitlines()
-        if line.strip()
+        line.strip() for line in args.classes.read_text().splitlines() if line.strip()
     ]
     if not class_names:
         raise SystemExit("classes file must contain at least one class")

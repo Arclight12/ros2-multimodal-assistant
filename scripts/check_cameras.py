@@ -53,7 +53,10 @@ def parse_args() -> argparse.Namespace:
         help="phone MJPEG stream URL, e.g. http://192.168.1.10:8080/video",
     )
     parser.add_argument(
-        "--gaze-index", type=int, default=0, help="laptop webcam device index",
+        "--gaze-index",
+        type=int,
+        default=0,
+        help="laptop webcam device index",
     )
     parser.add_argument(
         "--gaze-device",
@@ -89,9 +92,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skip-gaze", action="store_true")
     args = parser.parse_args()
     if not args.skip_workspace and not args.workspace_url:
-        parser.error(
-            "--workspace-url is required unless --skip-workspace is given"
-        )
+        parser.error("--workspace-url is required unless --skip-workspace is given")
     return args
 
 
@@ -159,9 +160,7 @@ def check_webcam(args: argparse.Namespace, directory: Path) -> bool:
         f"\n[gaze] opening webcam {source!r} with backend "
         f"{args.gaze_backend!r} (OpenCV id {backend}) ..."
     )
-    capture = open_webcam(
-        cv2, source, args.gaze_backend, width=0, height=0
-    )
+    capture = open_webcam(cv2, source, args.gaze_backend, width=0, height=0)
     if capture is None:
         print(f"[gaze] FAIL: could not open webcam {source!r}. {WEBCAM_HINT}")
         return False

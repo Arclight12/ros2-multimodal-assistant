@@ -49,9 +49,7 @@ def validate_modal_paths(
     if not images_root.is_dir():
         raise FileNotFoundError(f"images directory not found: {images_root}")
     if not annotations_root.is_dir():
-        raise FileNotFoundError(
-            f"annotations directory not found: {annotations_root}"
-        )
+        raise FileNotFoundError(f"annotations directory not found: {annotations_root}")
     if not classes_path.is_file():
         raise FileNotFoundError(f"classes file not found: {classes_path}")
 
@@ -87,7 +85,9 @@ if modal is not None:
         if not os.environ.get("KAGGLE_API_TOKEN") and os.environ.get("KAGGLE_KEY"):
             os.environ["KAGGLE_API_TOKEN"] = os.environ["KAGGLE_KEY"]
         if not os.environ.get("KAGGLE_API_TOKEN"):
-            raise RuntimeError("Kaggle secret must provide KAGGLE_KEY or KAGGLE_API_TOKEN")
+            raise RuntimeError(
+                "Kaggle secret must provide KAGGLE_KEY or KAGGLE_API_TOKEN"
+            )
 
         items = select_kaggle_images(
             annotations_root, classes_path, max_images_per_class, seed
@@ -105,7 +105,9 @@ if modal is not None:
             for attempt in range(5):
                 with tempfile.TemporaryDirectory() as temporary:
                     environment = os.environ.copy()
-                    environment["KAGGLE_CONFIG_DIR"] = str(Path(temporary) / "kaggle-config")
+                    environment["KAGGLE_CONFIG_DIR"] = str(
+                        Path(temporary) / "kaggle-config"
+                    )
                     try:
                         result = _run_kaggle_download(
                             [
@@ -136,7 +138,9 @@ if modal is not None:
                         continue
                     if not result.returncode:
                         candidates = [
-                            path for path in Path(temporary).rglob("*") if path.is_file()
+                            path
+                            for path in Path(temporary).rglob("*")
+                            if path.is_file()
                         ]
                         if len(candidates) != 1:
                             raise RuntimeError(
@@ -161,8 +165,7 @@ if modal is not None:
                 downloaded += result
                 if index == 1 or index % 10 == 0 or index == len(items):
                     print(
-                        f"kaggle_progress={index}/{len(items)} "
-                        f"downloaded={downloaded}",
+                        f"kaggle_progress={index}/{len(items)} downloaded={downloaded}",
                         flush=True,
                     )
         return downloaded

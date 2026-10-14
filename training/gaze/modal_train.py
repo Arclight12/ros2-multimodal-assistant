@@ -26,8 +26,11 @@ if modal is not None:
         modal.Image.debian_slim(python_version="3.11")
         .apt_install("libgl1", "libglib2.0-0")
         .uv_pip_install(
-            "mediapipe==0.10.21", "numpy<2", "scipy<1.14",
-            "opencv-contrib-python-headless", "torch",
+            "mediapipe==0.10.21",
+            "numpy<2",
+            "scipy<1.14",
+            "opencv-contrib-python-headless",
+            "torch",
         )
         .add_local_dir(Path(__file__).parent, remote_path="/root/training/gaze")
         .add_local_dir(
@@ -83,8 +86,11 @@ if modal is not None:
                 results = pool.starmap(extract_person, [(p, stride) for p in people])
             features = [row for part, _ in results for row in part]
             targets = [row for _, part in results for row in part]
-            np.savez(cache, features=np.asarray(features, np.float32),
-                     targets=np.asarray(targets, np.float32))
+            np.savez(
+                cache,
+                features=np.asarray(features, np.float32),
+                targets=np.asarray(targets, np.float32),
+            )
             volume.commit()
         with np.load(cache) as data:
             features, targets = data["features"], data["targets"]
@@ -96,9 +102,16 @@ if modal is not None:
         output.parent.mkdir(parents=True, exist_ok=True)
         scripted.save(str(output))
         volume.commit()
-        print(f"stage=complete error={error:.4f} centre_baseline={baseline:.4f}", flush=True)
-        return {"model": output.read_bytes(), "error": error, "baseline": baseline,
-                "samples": len(features)}
+        print(
+            f"stage=complete error={error:.4f} centre_baseline={baseline:.4f}",
+            flush=True,
+        )
+        return {
+            "model": output.read_bytes(),
+            "error": error,
+            "baseline": baseline,
+            "samples": len(features),
+        }
 
     @app.local_entrypoint()
     def main(

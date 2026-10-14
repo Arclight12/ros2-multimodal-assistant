@@ -28,9 +28,7 @@ class WorkspaceCalibration:
         return self.calibrated and self.robot_transform_configured
 
 
-def workspace_contains(
-    x_m: float, y_m: float, width_m: float, height_m: float
-) -> bool:
+def workspace_contains(x_m: float, y_m: float, width_m: float, height_m: float) -> bool:
     """Return whether a workspace-local point lies inside its rectangle."""
     return (
         all(math.isfinite(value) for value in (x_m, y_m, width_m, height_m))
@@ -80,12 +78,8 @@ def map_pixel_to_workspace(
         denominator = row2[0] * pixel_x + row2[1] * pixel_y + row2[2]
         if not math.isfinite(denominator) or abs(denominator) < 1e-12:
             return None
-        normalized_x = (
-            row0[0] * pixel_x + row0[1] * pixel_y + row0[2]
-        ) / denominator
-        normalized_y = (
-            row1[0] * pixel_x + row1[1] * pixel_y + row1[2]
-        ) / denominator
+        normalized_x = (row0[0] * pixel_x + row0[1] * pixel_y + row0[2]) / denominator
+        normalized_y = (row1[0] * pixel_x + row1[1] * pixel_y + row1[2]) / denominator
     except (TypeError, ValueError):
         return None
     if not workspace_contains(normalized_x, normalized_y, 1.0, 1.0):

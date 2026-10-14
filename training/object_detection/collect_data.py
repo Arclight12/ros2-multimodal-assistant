@@ -12,8 +12,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", required=True, help="Phone IP stream URL")
     parser.add_argument(
-        "--output", type=Path,
-        default=Path("datasets/object_detection/raw")
+        "--output", type=Path, default=Path("datasets/object_detection/raw")
     )
     parser.add_argument("--frames", type=int, default=200)
     parser.add_argument("--interval-seconds", type=float, default=0.5)

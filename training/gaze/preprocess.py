@@ -10,7 +10,9 @@ from pathlib import Path
 import numpy as np
 
 # The ROS node and training must compute identical features.
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src" / "assistant_interaction"))
+sys.path.insert(
+    0, str(Path(__file__).resolve().parents[2] / "src" / "assistant_interaction")
+)
 from assistant_interaction.gaze_features import landmark_features  # noqa: E402
 
 

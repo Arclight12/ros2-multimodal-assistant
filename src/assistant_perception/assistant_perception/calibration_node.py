@@ -91,18 +91,14 @@ class CalibrationNode(Node):
         if self._mock_mode:
             response.success = True
             response.calibrated = False
-            response.message = (
-                "Mock calibration is intentionally not valid for motion."
-            )
+            response.message = "Mock calibration is intentionally not valid for motion."
             return response
         if not self._transform_configured:
             return self._refuse(
                 response, "workspace-to-base transform is not configured"
             )
         if cv2 is None or np is None or self._bridge is None:
-            return self._refuse(
-                response, "OpenCV, NumPy, or cv_bridge is unavailable"
-            )
+            return self._refuse(response, "OpenCV, NumPy, or cv_bridge is unavailable")
         if self._latest_image is None:
             return self._refuse(response, "no workspace camera frame is available")
         try:
@@ -113,9 +109,7 @@ class CalibrationNode(Node):
         except Exception as exc:  # noqa: BLE001 - camera boundary
             return self._refuse(response, f"marker detection failed: {exc}")
         if homography is None:
-            return self._refuse(
-                response, "all configured ArUco markers were not found"
-            )
+            return self._refuse(response, "all configured ArUco markers were not found")
         calibration = WorkspaceCalibration(
             calibrated=True,
             homography=tuple(
@@ -156,12 +150,8 @@ class CalibrationNode(Node):
             centers[int(marker_id)] = marker_corners[0].mean(axis=0)
         if any(marker_id not in centers for marker_id in self._marker_ids):
             return None
-        source = np.float32(
-            [centers[marker_id] for marker_id in self._marker_ids]
-        )
-        destination = np.float32(
-            [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]
-        )
+        source = np.float32([centers[marker_id] for marker_id in self._marker_ids])
+        destination = np.float32([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
         homography, _ = cv2.findHomography(source, destination)
         return homography
 

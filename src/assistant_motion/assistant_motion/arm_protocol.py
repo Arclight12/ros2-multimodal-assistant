@@ -22,9 +22,7 @@ def joints_to_servo_degrees(
     degrees = []
     for angle, offset, sign in zip(angles, offsets_deg, signs):
         value = float(offset) + float(sign) * math.degrees(float(angle))
-        if not math.isfinite(value) or not (
-            SERVO_MIN_DEG <= value <= SERVO_MAX_DEG
-        ):
+        if not math.isfinite(value) or not (SERVO_MIN_DEG <= value <= SERVO_MAX_DEG):
             raise ValueError(f"servo angle {value} is outside 0..180")
         degrees.append(value)
     return degrees
@@ -33,9 +31,7 @@ def joints_to_servo_degrees(
 def parse_command(payload: str) -> dict[str, Any]:
     """Decode and shape-check one /arm/command JSON message."""
     command = json.loads(payload)
-    if not isinstance(command, dict) or not isinstance(
-        command.get("command"), str
-    ):
+    if not isinstance(command, dict) or not isinstance(command.get("command"), str):
         raise ValueError("command must be an object with a string command")
     return command
 

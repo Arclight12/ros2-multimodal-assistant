@@ -35,35 +35,21 @@ class MotionPlannerNode(Node):
         self.declare_parameter("pregrasp_offset_m", 0.04)
         self.declare_parameter("arm_command_timeout_s", 15.0)
         defaults = ArmGeometry()
-        self.declare_parameter(
-            "arm_shoulder_height_m", defaults.shoulder_height_m
-        )
+        self.declare_parameter("arm_shoulder_height_m", defaults.shoulder_height_m)
         self.declare_parameter("arm_upper_arm_m", defaults.upper_arm_m)
         self.declare_parameter("arm_forearm_m", defaults.forearm_m)
         self.declare_parameter("arm_gripper_m", defaults.gripper_m)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
-        self._motion_enabled = bool(
-            self.get_parameter("motion_enabled").value
-        )
-        self._workspace_width = float(
-            self.get_parameter("workspace_width_m").value
-        )
-        self._workspace_height = float(
-            self.get_parameter("workspace_height_m").value
-        )
+        self._motion_enabled = bool(self.get_parameter("motion_enabled").value)
+        self._workspace_width = float(self.get_parameter("workspace_width_m").value)
+        self._workspace_height = float(self.get_parameter("workspace_height_m").value)
         self._detection_timeout = float(
             self.get_parameter("detection_timeout_seconds").value
         )
-        self._pregrasp_offset = float(
-            self.get_parameter("pregrasp_offset_m").value
-        )
-        self._command_timeout = float(
-            self.get_parameter("arm_command_timeout_s").value
-        )
+        self._pregrasp_offset = float(self.get_parameter("pregrasp_offset_m").value)
+        self._command_timeout = float(self.get_parameter("arm_command_timeout_s").value)
         self._geometry = ArmGeometry(
-            shoulder_height_m=float(
-                self.get_parameter("arm_shoulder_height_m").value
-            ),
+            shoulder_height_m=float(self.get_parameter("arm_shoulder_height_m").value),
             upper_arm_m=float(self.get_parameter("arm_upper_arm_m").value),
             forearm_m=float(self.get_parameter("arm_forearm_m").value),
             gripper_m=float(self.get_parameter("arm_gripper_m").value),
@@ -76,9 +62,7 @@ class MotionPlannerNode(Node):
         self._detections: DetectedObjectArray | None = None
         self._selection: ObjectSelection | None = None
         self._hardware_available = False
-        self._command_publisher = self.create_publisher(
-            String, "/arm/command", 10
-        )
+        self._command_publisher = self.create_publisher(String, "/arm/command", 10)
         self._detection_subscription = self.create_subscription(
             DetectedObjectArray,
             "/object_detections",
@@ -131,17 +115,13 @@ class MotionPlannerNode(Node):
             self._done.add(message.data)
             self._done_cond.notify_all()
 
-    def _execute_grasp_callback(
-        self, goal_handle: Any
-    ) -> ExecuteGrasp.Result:
+    def _execute_grasp_callback(self, goal_handle: Any) -> ExecuteGrasp.Result:
         """Run the validated grasp sequence."""
         goal = goal_handle.request
         self._feedback(goal_handle, "target_received")
         detection = self._find_live_detection(goal.object_id)
         if detection is None:
-            return self._abort(
-                goal_handle, "selected object is not in live detections"
-            )
+            return self._abort(goal_handle, "selected object is not in live detections")
         if self._mock_mode:
             return self._run_mock_grasp(goal_handle, goal.object_id)
 
@@ -150,15 +130,10 @@ class MotionPlannerNode(Node):
         stages = self._plan_stages(pose) if valid_pose(pose) else None
         state = GraspSafetyState(
             mock_mode=False,
-            workspace_calibrated=bool(
-                self._detections and self._detections.calibrated
-            )
-            and bool(
-                detection.has_workspace_pose and detection.has_robot_pose
-            ),
+            workspace_calibrated=bool(self._detections and self._detections.calibrated)
+            and bool(detection.has_workspace_pose and detection.has_robot_pose),
             stable_selection=bool(
-                self._selection
-                and self._selection.object_id == goal.object_id
+                self._selection and self._selection.object_id == goal.object_id
             ),
             target_pose_valid=valid_pose(pose),
             target_in_workspace=self._within_workspace(detection),
@@ -168,9 +143,7 @@ class MotionPlannerNode(Node):
         )
         decision = validate_real_grasp(state)
         if not decision.allowed:
-            return self._abort(
-                goal_handle, f"refusing real grasp: {decision.reason}"
-            )
+            return self._abort(goal_handle, f"refusing real grasp: {decision.reason}")
 
         self._done.clear()
         for stage, command in stages:
@@ -185,9 +158,7 @@ class MotionPlannerNode(Node):
         goal_handle.succeed()
         return self._result(True, f"Grasp of '{goal.object_id}' completed.")
 
-    def _run_mock_grasp(
-        self, goal_handle: Any, object_id: str
-    ) -> ExecuteGrasp.Result:
+    def _run_mock_grasp(self, goal_handle: Any, object_id: str) -> ExecuteGrasp.Result:
         """Exercise every grasp stage without publishing hardware commands."""
         for stage in (
             "validating",
@@ -206,8 +177,7 @@ class MotionPlannerNode(Node):
         goal_handle.succeed()
         return self._result(
             True,
-            f"Mock grasp of '{object_id}' completed "
-            "(SIMULATED, no robot motion).",
+            f"Mock grasp of '{object_id}' completed (SIMULATED, no robot motion).",
         )
 
     def _find_live_detection(self, object_id: str):
@@ -223,17 +193,11 @@ class MotionPlannerNode(Node):
             if age > self._detection_timeout:
                 return None
         return next(
-            (
-                item
-                for item in self._detections.objects
-                if item.object_id == object_id
-            ),
+            (item for item in self._detections.objects if item.object_id == object_id),
             None,
         )
 
-    def _pose_tuple(
-        self, detection, goal
-    ) -> tuple[float, float, float] | None:
+    def _pose_tuple(self, detection, goal) -> tuple[float, float, float] | None:
         """Prefer live mapped pose and use a goal pose only as fallback."""
         if detection.has_robot_pose:
             pose = detection.robot_pose.position

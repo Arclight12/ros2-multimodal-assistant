@@ -34,12 +34,8 @@ class WorkspaceCameraNode(Node):
         self._camera_url = str(self.get_parameter("camera_url").value)
         self._frame_id = str(self.get_parameter("camera_frame_id").value)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
-        self._open_timeout_ms = int(
-            self.get_parameter("camera_open_timeout_ms").value
-        )
-        self._read_timeout_ms = int(
-            self.get_parameter("camera_read_timeout_ms").value
-        )
+        self._open_timeout_ms = int(self.get_parameter("camera_open_timeout_ms").value)
+        self._read_timeout_ms = int(self.get_parameter("camera_read_timeout_ms").value)
         self._reconnect_base_s = float(
             self.get_parameter("camera_reconnect_base_delay_s").value
         )

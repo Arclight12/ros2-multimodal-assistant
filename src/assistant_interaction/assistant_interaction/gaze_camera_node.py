@@ -67,9 +67,7 @@ class GazeCameraNode(Node):
                 self._reconnect_enabled = True
                 self._open_capture()
         else:
-            self.get_logger().warning(
-                "Gaze camera running in deterministic mock mode."
-            )
+            self.get_logger().warning("Gaze camera running in deterministic mock mode.")
         fps = max(1.0, float(self.get_parameter("gaze_camera_fps").value))
         self._timer = self.create_timer(1.0 / fps, self._publish_next_frame)
 
