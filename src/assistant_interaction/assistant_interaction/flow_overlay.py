@@ -11,7 +11,6 @@ from typing import Any
 GREEN = (0, 200, 0)
 YELLOW = (0, 220, 255)
 RED = (0, 0, 255)
-WHITE = (255, 255, 255)
 
 
 def describe_selection(selection: dict[str, Any]) -> str:

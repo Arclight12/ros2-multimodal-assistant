@@ -1,3 +1,7 @@
 [tool.ruff]
 line-length = 88
 extend-exclude = ["imagenet-loc", "datasets"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W"]
+per-file-ignores = { "**/setup.py" = ["E501"] }

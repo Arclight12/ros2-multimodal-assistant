@@ -153,7 +153,8 @@ if modal is not None:
                         return False
                     if "429" not in result.stderr or attempt == 4:
                         raise RuntimeError(
-                            f"Kaggle download failed for {item.relative_image}: {result.stderr}"
+                            f"Kaggle download failed for {item.relative_image}: "
+                            f"{result.stderr}"
                         )
                     time.sleep(15 * (attempt + 1))
             return False

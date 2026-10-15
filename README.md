@@ -52,6 +52,18 @@ Training is separate from ROS runtime code. Install `requirements-train.txt`
 [docs/model_training.md](docs/model_training.md) for collection, preparation,
 training, and evaluation commands.
 
+## Pipeline
+
+```text
+phone camera  -> object_detector -> workspace_mapper -> /object_detections
+laptop webcam -> gaze_estimation -> /gaze/point
+/object_detections + /gaze/point -> selection_manager -> /final_selection
+/final_selection -> motion_planner (ExecuteGrasp action) -> arm_controller
+```
+
+The mapper alone converts pixels to workspace/base coordinates; the selection
+manager alone decides intent; the motion package only executes `ExecuteGrasp`.
+
 ## Packages
 
 `assistant_msgs` owns interfaces; `assistant_perception` owns camera, detection,
@@ -59,11 +71,14 @@ mapping, and calibration; `assistant_interaction` owns gaze and temporal target 
 `assistant_bringup` owns launch and configuration. The arm protocol and bring-up
 steps are in [docs/arm.md](docs/arm.md); the Arduino sketch is in `firmware/`.
 
-## Verification
+## Development
 
 ```bash
-python3 -m flake8 src/assistant_perception/assistant_perception src/assistant_interaction/assistant_interaction src/assistant_motion/assistant_motion training
+python -m ruff format src scripts training
+python -m ruff check src scripts training
+colcon build --symlink-install
 ```
 
-See [docs/development.md](docs/development.md) for the hardware-free
-development workflow.
+Keep ROS callbacks thin; geometry, selection and safety rules live in pure
+modules. Never commit datasets, model weights, runtime calibration or serial
+credentials. Running on a Raspberry Pi: [docs/pi_runbook.md](docs/pi_runbook.md).

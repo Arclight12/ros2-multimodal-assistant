@@ -6,7 +6,6 @@ import argparse
 from pathlib import Path
 
 import numpy as np
-
 from preprocess import extract_features
 
 

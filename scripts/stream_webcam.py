@@ -85,7 +85,8 @@ def main() -> None:
         daemon=True,
     ).start()
     print(
-        f"Streaming webcam {args.index} at http://0.0.0.0:{args.port}/video (Ctrl+C stops)"
+        f"Streaming webcam {args.index} at http://0.0.0.0:{args.port}/video "
+        "(Ctrl+C stops)"
     )
     ThreadingHTTPServer(("0.0.0.0", args.port), Handler).serve_forever()
 

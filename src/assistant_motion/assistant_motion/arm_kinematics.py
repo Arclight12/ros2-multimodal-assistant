@@ -40,32 +40,6 @@ class JointAngles:
     wrist: float
 
 
-def forward_kinematics(
-    angles: JointAngles,
-    geometry: ArmGeometry,
-) -> tuple[float, float, float]:
-    """Return the gripper fingertip (x, y, z) in the arm base frame."""
-    shoulder = angles.shoulder
-    forearm = angles.shoulder + angles.elbow
-    gripper = forearm + angles.wrist
-    radius = (
-        geometry.upper_arm_m * math.cos(shoulder)
-        + geometry.forearm_m * math.cos(forearm)
-        + geometry.gripper_m * math.cos(gripper)
-    )
-    height = (
-        geometry.shoulder_height_m
-        + geometry.upper_arm_m * math.sin(shoulder)
-        + geometry.forearm_m * math.sin(forearm)
-        + geometry.gripper_m * math.sin(gripper)
-    )
-    return (
-        radius * math.cos(angles.base),
-        radius * math.sin(angles.base),
-        height,
-    )
-
-
 def _within(value: float, bounds: tuple[float, float]) -> bool:
     """Return whether a value lies inside an inclusive (min, max) range."""
     return bounds[0] <= value <= bounds[1]

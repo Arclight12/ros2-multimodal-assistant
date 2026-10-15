@@ -9,7 +9,6 @@ import math
 _POINTS = (33, 133, 159, 145, 263, 362, 386, 374, 468, 473, 152, 1, 10, 61, 291)
 # (outer corner, inner corner, iris centre) for each eye.
 _EYES = ((33, 133, 468), (263, 362, 473))
-FEATURE_COUNT = 3 * len(_POINTS) + 2 * len(_EYES) + 3
 
 
 def landmark_features(landmarks) -> list[float]:

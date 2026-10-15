@@ -14,7 +14,7 @@ setup(
     zip_safe=True,
     maintainer="Multimodal Assistant Team",
     maintainer_email="team@example.com",
-    description="Perception package for workspace understanding and object map generation.",
+    description="Workspace camera, object detection, mapping and calibration.",
     license="MIT",
     entry_points={
         "console_scripts": [
