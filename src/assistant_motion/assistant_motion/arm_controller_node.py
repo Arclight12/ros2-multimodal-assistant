@@ -1,128 +1,183 @@
-"""Arm controller node: serial abstraction for the Arduino-controlled arm.
-
-This node provides a thin serial communication layer toward the Arduino Uno
-that drives the servo-based robotic arm and gripper. It translates high-level
-commands (move to pose, open/close gripper) into serial protocol messages that
-the Arduino firmware will interpret.
-
-The actual Arduino firmware and MoveIt are intentionally not implemented here;
-this node is a communication placeholder.
-
-This node contains no perception or interaction logic.
-
-Topics
-------
-* Subscribes to ``/final_selection`` (``assistant_msgs/ObjectSelection``) for
-  activation, though actual actuation is driven by the motion planner.
-"""
+"""Hardware-isolated arm command adapter with deterministic mock mode."""
 
 from __future__ import annotations
 
+import os
+import time
+from collections import deque
+
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 
-from assistant_msgs.msg import ObjectSelection
+try:
+    import serial
+except ImportError:  # pragma: no cover - optional hardware dependency
+    serial = None
 
-# Protocol markers for simplicity. Placeholder framing for the serial link.
-_CMD_GOTO = "G"
-_CMD_GRIPPER_OPEN = "O"
-_CMD_GRIPPER_CLOSE = "C"
+from .arm_protocol import command_frame, parse_command
+from .workspace_checks import clamp_command, load_channel_limits
+
+# The Uno resets when the port opens, so wait for its READY line.
+READY_TIMEOUT_S = 6.0
 
 
 class ArmControllerNode(Node):
-    """Abstraction layer for serial communication with the Arduino arm."""
+    """Translate abstract motion commands into mock or serial operations."""
 
     def __init__(self) -> None:
-        """Initialize the arm controller node."""
         super().__init__("arm_controller_node")
-
-        self.declare_parameter("serial_port", "/dev/ttyACM0")
+        self.declare_parameter("serial_port", "")
         self.declare_parameter("baudrate", 115200)
-
-        self._serial_port: str = (
-            self.get_parameter("serial_port").get_parameter_value().string_value
+        self.declare_parameter("mock_mode", True)
+        self._serial_port = os.path.expanduser(
+            str(self.get_parameter("serial_port").value)
         )
-        self._baudrate: int = (
-            self.get_parameter("baudrate").get_parameter_value().integer_value
-        )
-
+        self._baudrate = int(self.get_parameter("baudrate").value)
+        self._mock_mode = bool(self.get_parameter("mock_mode").value)
+        # robot.yaml channel_limits: last ROS-side clamp before the Arduino,
+        # which keeps its own out_of_range check as the final gate.
+        self._channel_limits = load_channel_limits(self)
+        self._clamp_logged = False
         self._serial = None
-        self._try_open_serial()
-
-        self._selection_sub = self.create_subscription(
-            ObjectSelection, "/final_selection", self._on_final_selection, 10
+        self._status = "unavailable"
+        self._opened_at = 0.0
+        self._pending: deque = deque()
+        self._status_publisher = self.create_publisher(String, "/arm/status", 10)
+        self._done_publisher = self.create_publisher(String, "/arm/done", 10)
+        self._subscription = self.create_subscription(
+            String, "/arm/command", self._on_command, 10
         )
+        self._open_hardware()
+        # Republished so late subscribers (the planner) still see the state.
+        self.create_timer(0.05, self._poll)
+        self.create_timer(1.0, self._publish_status)
 
-        self.get_logger().info(
-            f"ArmControllerNode initialized | port={self._serial_port} | "
-            f"baud={self._baudrate}"
-        )
+    def _open_hardware(self) -> None:
+        """Open serial only when explicitly outside mock mode."""
+        if self._mock_mode:
+            self._status = "mock"
+            self.get_logger().warning(
+                "Arm controller is in mock mode; no commands reach hardware."
+            )
+            return
+        if serial is None:
+            self.get_logger().error(
+                "pyserial is unavailable; arm hardware is disabled."
+            )
+            return
+        if not self._serial_port:
+            self.get_logger().error("serial_port is empty; arm hardware is disabled.")
+            return
+        try:
+            self._serial = serial.Serial(
+                self._serial_port, self._baudrate, timeout=0.05
+            )
+        except (OSError, serial.SerialException) as exc:
+            self.get_logger().error(f"Unable to open arm serial port: {exc}")
+            return
+        self._opened_at = time.monotonic()
+        self._status = "connecting"
 
-    def _try_open_serial(self) -> None:
-        """Attempt to open the serial port to the Arduino.
+    def _on_command(self, message: String) -> None:
+        """Validate, clamp and execute one hardware-neutral command."""
+        try:
+            command = parse_command(message.data)
+            command, notes = clamp_command(command, self._channel_limits)
+            if notes and not self._clamp_logged:
+                self._clamp_logged = True
+                self.get_logger().warning(
+                    "Clamped an arm command into the robot.yaml channel limits: "
+                    + ", ".join(notes)
+                )
+            frame = command_frame(command)
+        except ValueError as exc:  # includes json.JSONDecodeError
+            self.get_logger().error(f"Rejected malformed arm command: {exc}")
+            self._publish_done(command_id_of(message.data), ok=False)
+            return
+        command_id = command.get("id")
+        if self._mock_mode:
+            self.get_logger().info(f"MOCK arm command: {frame.strip()}")
+            self._publish_done(command_id, ok=True)
+            return
+        if self._status != "available":
+            self.get_logger().error("Rejected arm command: hardware is unavailable.")
+            self._publish_done(command_id, ok=False)
+            return
+        self._pending.append(command_id)
+        self._serial.write(frame.encode("ascii"))
 
-        If no device is present the node logs a warning and continues running so
-        the rest of the system can still be exercised.
-        """
-        # TODO(motion-team): use pyserial to open ``self._serial_port`` at
-        # ``self._baudrate`` once hardware is connected.
-        self.get_logger().warn(
-            f"Serial connection to {self._serial_port} not established (placeholder)."
-        )
+    def _poll(self) -> None:
+        """Read Arduino replies and watch for the boot handshake."""
+        if self._serial is None:
+            return
+        try:
+            while self._serial.in_waiting:
+                # shortcut: a partial line is dropped on read timeout.
+                line = self._serial.readline().decode("ascii", "ignore")
+                self._handle_line(line.strip())
+        except (OSError, serial.SerialException) as exc:
+            self.get_logger().error(f"Arm serial link lost: {exc}")
+            self._serial.close()
+            self._serial = None
+            self._status = "unavailable"
+            while self._pending:
+                self._publish_done(self._pending.popleft(), ok=False)
+            return
+        if (
+            self._status == "connecting"
+            and time.monotonic() - self._opened_at > READY_TIMEOUT_S
+        ):
+            self.get_logger().error(
+                "Arduino did not send READY; is the arm firmware flashed?"
+            )
+            self._status = "unavailable"
 
-    def _on_final_selection(self, msg: ObjectSelection) -> None:
-        """Respond to a final selection by queuing a command.
+    def _handle_line(self, line: str) -> None:
+        """React to one Arduino reply line."""
+        if line == "READY":
+            self._status = "available"
+            self.get_logger().info("Arm hardware is ready.")
+        elif line == "OK" and self._pending:
+            self._publish_done(self._pending.popleft(), ok=True)
+        elif line.startswith("ERR"):
+            self.get_logger().error(f"Arduino reported: {line}")
+            if self._pending:
+                self._publish_done(self._pending.popleft(), ok=False)
 
-        :param msg: The final selection message.
-        """
-        self.get_logger().info(f"Arm controller noted final selection: {msg.object_id}")
+    def _publish_done(self, command_id, ok: bool) -> None:
+        """Acknowledge one command so the planner can sequence stages."""
+        if command_id is None:
+            return
+        suffix = "" if ok else ":error"
+        self._done_publisher.publish(String(data=f"{command_id}{suffix}"))
 
-    def _send_command(self, command: str, arguments: list[float] | None = None) -> None:
-        """Send a serial command frame to the Arduino.
-
-        :param command: The single-character command marker.
-        :param arguments: Optional numeric arguments for the command.
-        """
-        parts = [command]
-        if arguments:
-            parts.extend(str(arg) for arg in arguments)
-        frame = ",".join(parts) + "\n"
-        # TODO(motion-team): write the frame to the opened serial port.
-        self.get_logger().debug(f"Serial frame (not sent - placeholder): {frame!r}")
-
-    def _move_to_pose(self, x: float, y: float, z: float) -> None:
-        """Command the arm to a Cartesian position.
-
-        :param x: X coordinate.
-        :param y: Y coordinate.
-        :param z: Z coordinate.
-        """
-        self._send_command(_CMD_GOTO, [x, y, z])
-
-    def _set_gripper(self, closed: bool) -> None:
-        """Open or close the gripper.
-
-        :param closed: True to close the gripper, False to open it.
-        """
-        self._send_command(_CMD_GRIPPER_CLOSE if closed else _CMD_GRIPPER_OPEN)
+    def _publish_status(self) -> None:
+        """Publish current hardware availability."""
+        self._status_publisher.publish(String(data=self._status))
 
     def shutdown_callback(self) -> None:
-        """Perform clean shutdown, closing the serial connection."""
-        self.get_logger().info("Shutting down arm controller node.")
+        """Close the serial port."""
         if self._serial is not None:
-            # TODO(motion-team): close the serial port gracefully here.
-            pass
+            self._serial.close()
+
+
+def command_id_of(payload: str):
+    """Best-effort id extraction so malformed commands still get a reply."""
+    try:
+        return parse_command(payload).get("id")
+    except ValueError:
+        return None
 
 
 def main(args: list[str] | None = None) -> None:
-    """Entry point for the arm controller node executable."""
+    """Run the arm controller node."""
     rclpy.init(args=args)
     node = ArmControllerNode()
-
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Interrupted by user (Ctrl+C).")
+        pass
     finally:
         node.shutdown_callback()
         node.destroy_node()

@@ -1,10 +1,9 @@
+import os
+from glob import glob
+
 from setuptools import setup
 
 package_name = "assistant_bringup"
-data_files = []
-
-import os
-from glob import glob
 
 data_files = [
     ("share/ament_index/resource_index/packages", ["resource/" + package_name]),

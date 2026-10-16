@@ -1,114 +1,107 @@
-# Setup Guide
+# Setup
 
-This guide walks through a clean installation of the multimodal assistant on
-**Ubuntu 24.04** with **ROS 2 Jazzy**.
-
-## 1. Prerequisites
-
-- Ubuntu 24.04 (desktop or server).
-- A GitHub account (for cloning).
-- ROS 2 Jazzy installed.
-- Python 3.10+.
-
-## 2. Install ROS 2 Jazzy
-
-If ROS 2 is not already installed, follow the official instructions:
+Install ROS 2 Jazzy on Ubuntu 24.04, source it, and install workspace dependencies:
 
 ```bash
-sudo apt update
-sudo apt install software-properties-common
-sudo add-apt-repository universe
-sudo apt update && sudo apt install curl -y
-sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-  -o /usr/share/keyrings/ros-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) \
-signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
-  | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
-sudo apt update
-sudo apt upgrade -y
-sudo apt install ros-jazzy-ros-base python3-colcon-common-extensions \
-  python3-rosdep python3-vcstool -y
-```
-
-Source the environment in every terminal:
-
-```bash
-echo "source /opt/ros/jazzy/setup.bash" >> ~/.bashrc
-source ~/.bashrc
-```
-
-## 3. Install rosdep Dependencies
-
-```bash
-sudo rosdep init
+source /opt/ros/jazzy/setup.bash
+sudo rosdep init  # once per machine; ignore the error if already initialized
 rosdep update
-```
-
-Note: if `rosdep init` reports that it is already initialized, skip it.
-
-> **Portability note:** `rosdep` was not runnable on the development machine
-> (not installed, and no system `pip` overrides). These steps follow the
-> standard Ubuntu 24.04 / Jazzy flow and the CI job runs `rosdep install`, but
-> the exact `rosdep` output was not captured on a fresh machine. In practice
-> the skeleton's ROS packages only need `rclpy`, `std_msgs`, `launch`,
-> `launch_ros`, and `ament_index_python`, which ship with `ros-jazzy-ros-base`.
-
-## 4. Install Python Dependencies
-
-From the workspace root:
-
-```bash
-python3 -m pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-This installs NumPy, OpenCV (contrib, a superset that includes the ArUco
-modules), MediaPipe, Ultralytics, Vosk, pyserial, and PyYAML.
-
-> The skeleton itself does **not** import any of these packages; they are
-> needed only by the future inference features. The running workspace needs
-> only the ROS 2 system packages. `opencv-python` is intentionally not listed,
-> since `opencv-contrib-python` is a superset.
-
-## 5. Clone the Repository
-
-```bash
-git clone https://github.com/Arclight12/ros2-multimodal-assistant.git
-cd ros2-multimodal-assistant
-```
-
-## 6. Build the Workspace
-
-```bash
+rosdep install --from-paths src --ignore-src -r -y
+python3 -m pip install -r requirements.txt
 colcon build --symlink-install
 source install/setup.bash
 ```
 
-Use `--symlink-install` during active development so Python edits apply without
-rebuilding.
+The phone must expose an OpenCV-readable HTTP/MJPEG stream. Put that URL in
+`config/cameras.yaml`; put the laptop device index there too. Model paths are
+configured in `perception.yaml` and `gaze.yaml`.
 
-## 7. Launch the System
+## Connect real cameras
+
+The workspace camera is a phone; the gaze camera is the laptop webcam. Both
+are configured in `src/assistant_bringup/config/cameras.yaml` (or launch
+overrides) and should be verified before starting ROS.
+
+### Phone (workspace camera)
+
+1. Install an IP camera app on the phone and start its server:
+   - **IP Webcam** (Android): `http://<phone-ip>:8080/video`
+   - **DroidCam** (Android/iOS): `http://<phone-ip>:4747/video`
+2. Put the laptop on the same Wi-Fi network and use the phone IP the app
+   displays. Use the direct stream URL, not the app's browser control page.
+3. Keep the app running in the background (Android: enable the app's background
+   mode, disable battery optimization for it) and disable screen timeout so the
+   stream does not drop mid-session. If it does drop, the workspace camera node
+   reconnects automatically with backoff.
+
+### Laptop webcam (gaze camera)
+
+The gaze camera defaults to device index `0`. If the wrong camera is picked,
+probe the available indices and configure `gaze_camera_index` (or a device
+path such as `/dev/video2` via `gaze_camera_device`). On Windows prefer
+backend `dshow`, on Linux `v4l2`:
 
 ```bash
-ros2 launch assistant_bringup system.launch.py
+python3 scripts/check_cameras.py --probe 4
 ```
 
-## Optional: Missing AI Models
+### Verify cameras without ROS
 
-The skeleton runs **without** any AI models. To later enable inference:
+Run the diagnostics before launching the graph; it opens each camera with the
+same helpers the nodes use, prints resolution and measured fps, and saves
+snapshots to inspect:
 
-- **YOLOv8n**: download `yolov8n.pt` into `models/`.
-- **MediaPipe**: the FaceMesh model is fetched by the MediaPipe runtime.
-- **Vosk**: place a small Vosk model (e.g. `vosk-model-small-en-us`) in `models/`.
+```bash
+python3 scripts/check_cameras.py \
+  --workspace-url http://192.168.1.10:8080/video \
+  --gaze-index 0 --gaze-backend dshow
+```
 
-Models are git-ignored to keep the repository small.
+Note for WSL2: the phone stream is plain HTTP and works from WSL2; direct
+webcam access inside WSL2 additionally requires attaching the device with
+`usbipd-win`.
 
-## Verification
+### Launch with real cameras
 
-| Check | Command |
-|-------|---------|
-| Nodes running | `ros2 node list` |
-| Graph introspection | `ros2 topic list` / `ros2 service list` |
-| Trigger a scan | `ros2 service call /scan_workspace ...` |
-| Grasp (skeleton) | `ros2 action send_goal /execute_grasp ...` |
+Start real camera inference without enabling motion:
+
+```bash
+ros2 launch assistant_bringup system.launch.py mock_mode:=false \
+  workspace_camera_url:=http://192.168.1.10:8080/video \
+  gaze_camera_index:=0 gaze_camera_backend:=dshow
+```
+
+Verify that frames are flowing and preview them:
+
+```bash
+ros2 topic hz /workspace/image_raw
+ros2 topic hz /gaze/image_raw
+ros2 run rqt_image_view rqt_image_view
+```
+
+Real manipulation additionally requires a valid saved calibration, trained
+weights, a configured transform, the measured arm geometry and the flashed
+arm firmware (see [arm.md](arm.md)).
+
+## Raspberry Pi
+
+Target: Raspberry Pi 4 or 5 with **Ubuntu Server 24.04 (64-bit)**. Raspberry Pi
+OS and other Debian releases are not supported: ROS 2 Jazzy has no packages for
+them. On a fresh Ubuntu 24.04 install, `bash scripts/setup_pi.sh` installs ROS 2
+Jazzy, the Python dependencies in a venv and serial access, then
+builds the workspace; it refuses to run on any other OS. Notes:
+
+- `requirements.txt` is the runtime set. Do not install `requirements-train.txt`
+  on the Pi. Ultralytics still pulls in torch as a dependency.
+- Use the Linux camera backend for the laptop webcam, or a USB webcam on the Pi:
+  `gaze_camera_backend:=v4l2`.
+- The phone stream is unchanged: set `workspace_camera_url` as above.
+- Arduino arm controller: it appears as `/dev/ttyACM0` (or `/dev/ttyUSB0`).
+  Run `sudo usermod -aG dialout $USER` and log out and back in, then set
+  `arm_controller_node.serial_port` in `robot.yaml`. See [arm.md](arm.md).
+- Camera rates are the main load: `camera_fps` (workspace) and `gaze_camera_fps`
+  set how many frames reach YOLO and gaze. Lower them before lowering anything
+  else. `mock_detection_fps` and `mock_gaze_fps` only affect mock mode.
+- Detector and gaze models: exported NCNN directories are not accepted, because
+  `object_detector_node` loads only a single model file. ONNX is the workable
+  export. Export and speed on the Pi are untested.

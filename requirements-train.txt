@@ -1,0 +1,6 @@
+# Training-only dependencies for the training/ scripts (local runs and Modal
+# GPU jobs). Not needed on the Raspberry Pi and not imported by ROS nodes.
+-r requirements.txt
+
+torch
+modal

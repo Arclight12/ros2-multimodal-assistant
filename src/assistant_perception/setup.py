@@ -14,11 +14,14 @@ setup(
     zip_safe=True,
     maintainer="Multimodal Assistant Team",
     maintainer_email="team@example.com",
-    description="Perception package for workspace understanding and object map generation.",
+    description="Workspace camera, object detection, mapping and calibration.",
     license="MIT",
     entry_points={
         "console_scripts": [
+            "workspace_camera_node = assistant_perception.workspace_camera_node:main",
+            "object_detector_node = assistant_perception.object_detector_node:main",
             "workspace_mapper_node = assistant_perception.workspace_mapper_node:main",
+            "calibration_node = assistant_perception.calibration_node:main",
         ],
     },
 )

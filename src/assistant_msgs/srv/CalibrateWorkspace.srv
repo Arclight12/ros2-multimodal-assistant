@@ -1,0 +1,6 @@
+# Capture markers and persist a workspace-to-camera/base calibration.
+bool start_calibration
+---
+bool success
+bool calibrated
+string message

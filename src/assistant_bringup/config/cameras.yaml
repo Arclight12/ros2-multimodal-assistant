@@ -1,0 +1,37 @@
+# Real-camera configuration. All values have node-side defaults, so entries
+# can be removed; nothing here affects mock mode.
+#
+# Phone (workspace camera): install an IP camera app and put its DIRECT stream
+# URL below (not the browser control page):
+#   IP Webcam (Android):      http://<phone-ip>:8080/video
+#   DroidCam (Android/iOS):   http://<phone-ip>:4747/video
+# Keep the app running in the background and disable screen timeout so the
+# stream does not drop mid-session. scripts/check_cameras.py verifies the
+# stream without starting ROS.
+workspace_camera_node:
+  ros__parameters:
+    # camera_url comes from the workspace_camera_url launch argument; a value here would override it.
+    camera_frame_id: "workspace_camera"
+    camera_fps: 10.0
+    # FFMPEG open/read timeouts keep a dead stream from blocking the node.
+    camera_open_timeout_ms: 5000
+    camera_read_timeout_ms: 10000
+    # Reconnect backoff starts at the base delay and doubles up to the max.
+    camera_reconnect_base_delay_s: 1.0
+    camera_reconnect_max_delay_s: 30.0
+
+# Laptop webcam (gaze camera): index counts system cameras (0 is usually the
+# built-in webcam). gaze_camera_device optionally overrides the index with a
+# device path such as "/dev/video2". Backend names: auto, any, dshow, msmf,
+# v4l2, ffmpeg (dshow is often fastest on Windows, v4l2 on Linux). Width and
+# height of 0 keep the driver default resolution.
+gaze_camera_node:
+  ros__parameters:
+    # gaze_camera_index / gaze_camera_device / gaze_camera_backend come from launch arguments
+    # (node defaults: 0, "", "auto"); a value here would override them.
+    gaze_camera_width: 0
+    gaze_camera_height: 0
+    gaze_camera_frame_id: "gaze_camera"
+    gaze_camera_fps: 15.0
+    gaze_camera_reconnect_base_delay_s: 1.0
+    gaze_camera_reconnect_max_delay_s: 30.0

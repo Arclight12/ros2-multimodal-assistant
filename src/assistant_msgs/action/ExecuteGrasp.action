@@ -1,7 +1,7 @@
-# Goal: object identifier to grasp, e.g. "cup".
-
-# Identifier of the object to grasp, matching an entry in object_map.json.
+# Goal: object identifier and optional latest target pose.
 string object_id
+geometry_msgs/Pose target_pose
+bool has_target_pose
 ---
 # Result: outcome of the grasp execution.
 
@@ -13,5 +13,5 @@ string message
 ---
 # Feedback: state of the ongoing grasp.
 
-# Current step/state of execution, e.g. "planning", "moving", "grasping".
+# Current stage of the grasp sequence.
 string current_state

@@ -1,28 +1,29 @@
-# Python dependencies for the multimodal robotic assistant.
-#
-# IMPORTANT: The ROS 2 skeleton does NOT import any package listed here.
-# Everything below is required only for future integration (YOLO / ArUco /
-# MediaPipe / Vosk / Arduino). The current skeleton needs only `rclpy`, which
-# ships with ROS 2, plus the workspace packages themselves.
+# Runtime Python dependencies for the robot (target: Raspberry Pi 4/5, Ubuntu
+# 24.04 64-bit, ROS 2 Jazzy). ROS packages such as rclpy and cv_bridge come from
+# rosdep/apt, not pip. Training-only packages are in requirements-train.txt.
 
-# --- Perception (future: ArUco workspace mapping, YOLOv8n detection) ---
+# --- Perception (ArUco workspace mapping, YOLO detection) ---
 numpy
-opencv-contrib-python
+opencv-contrib-python<5
 # NOTE: `opencv-python` is intentionally NOT listed. `opencv-contrib-python`
 # is a superset that also provides the ArUco modules; installing both wheels
-# is redundant and can conflict.
+# is redundant and can conflict. Kept below 5 to match ROS's apt cv_bridge
+# (built against OpenCV 4).
 
-# --- Interaction: gaze (future: MediaPipe FaceMesh) ---
-mediapipe
+# --- Interaction: gaze (MediaPipe FaceMesh) ---
+# Below 1.0: MediaPipe 1.x removed the `mp.solutions` API the gaze node uses.
+# A range, not a pin: aarch64 (Raspberry Pi) wheels stop at 0.10.18.
+mediapipe>=0.10.13,<0.11
 
-# --- Interaction: voice (future: Vosk offline speech recognition) ---
-vosk
-
-# --- Perception (future: YOLOv8n via Ultralytics) ---
+# --- Perception (YOLO26n via Ultralytics) ---
+# Ultralytics depends on torch, so torch is installed here as a transitive dependency.
 ultralytics
 
-# --- Motion: serial communication with Arduino (future) ---
+# --- Motion: serial link to the Arduino arm controller ---
 pyserial
+
+# --- Interaction: voice (NVIDIA hosted speech NIM over gRPC) ---
+nvidia-riva-client
 
 # --- YAML configuration parsing ---
 pyyaml

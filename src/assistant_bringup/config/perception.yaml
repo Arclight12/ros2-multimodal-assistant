@@ -1,0 +1,18 @@
+object_detector_node:
+  ros__parameters:
+    object_model_path: "models/object_detection/object_detector.pt"
+    object_detection_confidence: 0.55
+    max_detections: 20
+    mock_detection_fps: 5.0
+
+workspace_mapper_node:
+  ros__parameters:
+    calibration_path: "~/.ros/ros2_multimodal_assistant/workspace_calibration.json"
+    object_map_path: "~/.ros/ros2_multimodal_assistant/object_map.json"
+    base_frame: "base_link"
+
+calibration_node:
+  ros__parameters:
+    calibration_path: "~/.ros/ros2_multimodal_assistant/workspace_calibration.json"
+    aruco_dictionary: "DICT_4X4_50"
+    marker_ids: [0, 1, 2, 3]

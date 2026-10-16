@@ -1,0 +1,21 @@
+# Voice: phone microphone (IP Webcam serves http://<phone-ip>:8080/audio.wav)
+# to NVIDIA's hosted speech NIM (gRPC). The key is read from the NVIDIA_API_KEY
+# environment variable, never from this file. Ignored in mock mode.
+# See docs/voice.md.
+voice_node:
+  ros__parameters:
+    voice_stream_url: ""
+    nvidia_server: "grpc.nvcf.nvidia.com:443"
+    # nemotron-asr-streaming (English, streaming-only). Another model's id comes
+    # from its build.nvidia.com "API" page, but offline-only models need a
+    # different call.
+    nvidia_function_id: "bb0837de-8c7b-481f-9ec8-ef5663e9c1fa"
+    language_code: "en-US"
+    voice_open_timeout_s: 5.0
+    voice_chunk_ms: 100
+    # Loudness that counts as speech; raise it in a noisy room.
+    voice_min_rms: 500.0
+    voice_end_silence_ms: 600
+    voice_max_utterance_s: 6.0
+    voice_reconnect_base_delay_s: 1.0
+    voice_reconnect_max_delay_s: 30.0

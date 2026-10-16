@@ -1,0 +1,15 @@
+gaze_estimation_node:
+  ros__parameters:
+    gaze_model_path: "models/gaze/gaze_model.pt"
+    minimum_gaze_confidence: 0.6
+    # Exponential smoothing of the gaze point: 1.0 = raw, lower = steadier.
+    gaze_smoothing: 0.3
+    mock_gaze_fps: 5.0
+
+selection_manager_node:
+  ros__parameters:
+    selection_hold_seconds: 1.0
+    minimum_gaze_confidence: 0.8
+    selection_grace_seconds: 0.5
+    maximum_gaze_object_distance: 0.2
+    minimum_detection_confidence: 0.55

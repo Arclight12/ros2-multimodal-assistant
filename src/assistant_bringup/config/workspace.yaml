@@ -1,0 +1,21 @@
+workspace_mapper_node:
+  ros__parameters:
+    workspace_width_m: 0.4
+    workspace_height_m: 0.3
+    table_z_m: 0.0
+
+calibration_node:
+  ros__parameters:
+    workspace_width_m: 0.4
+    workspace_height_m: 0.3
+    table_z_m: 0.0
+    base_origin_x_m: 0.0
+    base_origin_y_m: 0.0
+    base_origin_z_m: 0.0
+    base_yaw_rad: 0.0
+    robot_transform_configured: false
+
+motion_planner_node:
+  ros__parameters:
+    workspace_width_m: 0.4
+    workspace_height_m: 0.3

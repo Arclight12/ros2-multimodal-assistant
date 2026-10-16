@@ -2,6 +2,11 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>assistant_description</name>
+  <version>0.1.0</version>
+  <description>URDF and RViz description for the 4-DOF robotic assistant arm</description>
+  <maintainer email="team@example.com">Multimodal Assistant Team</maintainer>
+  <license>MIT</license>
+
   <version>0.0.0</version>
   <description>TODO: Package description</description>
   <maintainer email="awtistic@todo.todo">awtistic</maintainer>
