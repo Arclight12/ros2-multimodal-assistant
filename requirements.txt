@@ -22,5 +22,8 @@ ultralytics
 # --- Motion: serial link to the Arduino arm controller ---
 pyserial
 
+# --- Interaction: voice (NVIDIA hosted speech NIM over gRPC) ---
+nvidia-riva-client
+
 # --- YAML configuration parsing ---
 pyyaml

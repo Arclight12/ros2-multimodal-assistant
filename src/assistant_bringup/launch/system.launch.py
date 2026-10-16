@@ -13,7 +13,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description() -> LaunchDescription:
-    """Return the nine-node mock-safe system launch description."""
+    """Return the ten-node mock-safe system launch description."""
     bringup_dir = get_package_share_directory("assistant_bringup")
     config_dir = os.path.join(bringup_dir, "config")
     config = {
@@ -25,6 +25,7 @@ def generate_launch_description() -> LaunchDescription:
             "gaze.yaml",
             "workspace.yaml",
             "robot.yaml",
+            "voice.yaml",
         )
     }
 
@@ -50,6 +51,7 @@ def generate_launch_description() -> LaunchDescription:
         [
             DeclareLaunchArgument("mock_mode", default_value="true"),
             DeclareLaunchArgument("workspace_camera_url", default_value=""),
+            DeclareLaunchArgument("voice_stream_url", default_value=""),
             DeclareLaunchArgument("gaze_camera_index", default_value="0"),
             DeclareLaunchArgument("gaze_camera_device", default_value=""),
             DeclareLaunchArgument("gaze_camera_backend", default_value="auto"),
@@ -118,6 +120,19 @@ def generate_launch_description() -> LaunchDescription:
                 "selection_manager_node",
                 "selection_manager_node",
                 ["gaze.yaml"],
+            ),
+            node(
+                "assistant_interaction",
+                "voice_node",
+                "voice_node",
+                ["voice.yaml"],
+                [
+                    {
+                        "voice_stream_url": ParameterValue(
+                            LaunchConfiguration("voice_stream_url"), value_type=str
+                        )
+                    }
+                ],
             ),
             node(
                 "assistant_motion",

@@ -21,6 +21,7 @@ setup(
             "gaze_camera_node = assistant_interaction.gaze_camera_node:main",
             "gaze_estimation_node = assistant_interaction.gaze_estimation_node:main",
             "selection_manager_node = assistant_interaction.selection_manager_node:main",
+            "voice_node = assistant_interaction.voice_node:main",
             "flow_monitor_node = assistant_interaction.flow_monitor_node:main",
         ],
     },

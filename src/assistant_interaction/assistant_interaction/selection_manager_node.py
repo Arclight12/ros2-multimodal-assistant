@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.node import Node
+from std_msgs.msg import String
 
 from assistant_msgs.msg import DetectedObjectArray, GazePoint, ObjectSelection
 
@@ -13,6 +14,7 @@ from .selection_logic import (
     SelectionConfig,
     TemporalSelector,
     nearest_valid_detection,
+    select_by_class,
 )
 
 
@@ -27,6 +29,7 @@ class SelectionManagerNode(Node):
         # Equal to the detector threshold so every drawn box can be selected.
         self.declare_parameter("minimum_detection_confidence", 0.55)
         self.declare_parameter("selection_grace_seconds", 0.5)
+        self.declare_parameter("voice_priority_seconds", 5.0)
         self._config = SelectionConfig(
             minimum_gaze_confidence=float(
                 self.get_parameter("minimum_gaze_confidence").value
@@ -42,6 +45,10 @@ class SelectionManagerNode(Node):
             float(self.get_parameter("selection_hold_seconds").value),
             float(self.get_parameter("selection_grace_seconds").value),
         )
+        self._voice_priority_s = float(
+            self.get_parameter("voice_priority_seconds").value
+        )
+        self._voice_selected_at: float | None = None
         self._gaze: GazePoint | None = None
         self._detections: DetectedObjectArray | None = None
         self._publisher = self.create_publisher(ObjectSelection, "/final_selection", 10)
@@ -54,6 +61,37 @@ class SelectionManagerNode(Node):
             self._on_detections,
             10,
         )
+        self._voice_subscription = self.create_subscription(
+            String, "/voice/object_id", self._on_voice, 10
+        )
+
+    def _on_voice(self, message: String) -> None:
+        """Select a spoken class immediately; voice outranks gaze."""
+        class_name = message.data.strip().lower()
+        if self._detections is None:
+            self.get_logger().warning(
+                f"Voice asked for '{class_name}' but nothing is detected yet."
+            )
+            return
+        match = select_by_class(
+            class_name,
+            [
+                self._to_observation(
+                    item,
+                    self._detections.image_width,
+                    self._detections.image_height,
+                )
+                for item in self._detections.objects
+            ],
+            self._config,
+        )
+        if match is None:
+            self.get_logger().warning(
+                f"Voice asked for '{class_name}' but it is not visible."
+            )
+            return
+        self._voice_selected_at = self._now()
+        self._publish_selection(match, "voice", match.confidence)
 
     def _now(self) -> float:
         return self.get_clock().now().nanoseconds / 1_000_000_000.0
@@ -87,8 +125,17 @@ class SelectionManagerNode(Node):
             for item in self._detections.objects
         ]
         candidate = nearest_valid_detection(gaze, observations, self._config)
-        confirmed = self._selector.update(candidate, self._now())
+        now = self._now()
+        confirmed = self._selector.update(candidate, now)
         if confirmed is None:
+            return
+        if (
+            self._voice_selected_at is not None
+            and now - self._voice_selected_at < self._voice_priority_s
+        ):
+            self.get_logger().info(
+                "Ignoring gaze selection: a voice command has priority."
+            )
             return
         self._publish_selection(
             confirmed.detection,

@@ -88,6 +88,23 @@ def nearest_valid_detection(
     return nearest
 
 
+def select_by_class(
+    class_name: str,
+    detections: Iterable[DetectionObservation],
+    config: SelectionConfig,
+) -> DetectionObservation | None:
+    """Return the most confident valid detection of a spoken class."""
+    matches = [
+        detection
+        for detection in detections
+        if detection.object_id
+        and detection.class_name == class_name
+        and math.isfinite(detection.confidence)
+        and detection.confidence >= config.minimum_detection_confidence
+    ]
+    return max(matches, key=lambda item: item.confidence, default=None)
+
+
 class TemporalSelector:
     """Confirm one candidate after it stays stable for a hold duration.
 
