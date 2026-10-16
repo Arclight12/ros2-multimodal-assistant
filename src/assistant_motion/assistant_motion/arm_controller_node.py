@@ -43,6 +43,7 @@ class ArmControllerNode(Node):
         self._status = "unavailable"
         self._opened_at = 0.0
         self._pending: deque = deque()
+        self._rx = b""
         self._status_publisher = self.create_publisher(String, "/arm/status", 10)
         self._done_publisher = self.create_publisher(String, "/arm/done", 10)
         self._subscription = self.create_subscription(
@@ -77,6 +78,7 @@ class ArmControllerNode(Node):
             self.get_logger().error(f"Unable to open arm serial port: {exc}")
             return
         self._opened_at = time.monotonic()
+        self._rx = b""
         self._status = "connecting"
 
     def _on_command(self, message: String) -> None:
@@ -104,6 +106,20 @@ class ArmControllerNode(Node):
             self.get_logger().error("Rejected arm command: hardware is unavailable.")
             self._publish_done(command_id, ok=False)
             return
+        if command.get("command") == "stop":
+            # The Arduino never replies to a freeze; the command it interrupts
+            # answers ERR,stopped instead. So a stop is acknowledged here and
+            # must not join the queue of commands waiting for a reply.
+            self._serial.write(frame.encode("ascii"))
+            self._publish_done(command_id, ok=True)
+            return
+        if self._pending:
+            # The firmware discards everything but 'x' while a move runs, so a
+            # second command would never be answered and would shift every
+            # later OK onto the wrong id. Refuse it instead.
+            self.get_logger().error("Rejected arm command: previous one still running.")
+            self._publish_done(command_id, ok=False)
+            return
         self._pending.append(command_id)
         self._serial.write(frame.encode("ascii"))
 
@@ -112,10 +128,15 @@ class ArmControllerNode(Node):
         if self._serial is None:
             return
         try:
-            while self._serial.in_waiting:
-                # shortcut: a partial line is dropped on read timeout.
-                line = self._serial.readline().decode("ascii", "ignore")
-                self._handle_line(line.strip())
+            waiting = self._serial.in_waiting
+            if waiting:
+                # Buffer raw bytes so a reply split across reads is not lost.
+                self._rx += self._serial.read(waiting)
+            while b"\n" in self._rx:
+                raw, self._rx = self._rx.split(b"\n", 1)
+                self._handle_line(raw.decode("ascii", "ignore").strip())
+            if len(self._rx) > 256:  # no newline in a long run: line noise
+                self._rx = b""
         except (OSError, serial.SerialException) as exc:
             self.get_logger().error(f"Arm serial link lost: {exc}")
             self._serial.close()
@@ -140,6 +161,9 @@ class ArmControllerNode(Node):
             self.get_logger().info("Arm hardware is ready.")
         elif line == "OK" and self._pending:
             self._publish_done(self._pending.popleft(), ok=True)
+        elif line == "ERR,bad_calibration":
+            self.get_logger().error("Arduino refused its calibration; arm disabled.")
+            self._status = "unavailable"
         elif line.startswith("ERR"):
             self.get_logger().error(f"Arduino reported: {line}")
             if self._pending:
