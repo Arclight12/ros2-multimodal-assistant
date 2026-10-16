@@ -11,6 +11,8 @@ DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
     "pen": ("pen",),
     "phone": ("phone", "mobile", "cell phone"),
     "ball": ("ball",),
+    "toy": ("toy",),
+    "eraser": ("eraser", "rubber"),
 }
 
 

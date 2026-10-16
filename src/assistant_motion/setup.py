@@ -20,6 +20,7 @@ setup(
         "console_scripts": [
             "motion_planner_node = assistant_motion.motion_planner_node:main",
             "arm_controller_node = assistant_motion.arm_controller_node:main",
+            "pick_trigger_node = assistant_motion.pick_trigger_node:main",
         ],
     },
 )

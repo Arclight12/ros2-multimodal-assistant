@@ -1,4 +1,10 @@
-"""Hardware-isolated arm command adapter with deterministic mock mode."""
+"""Hardware-isolated arm command adapter with deterministic mock mode.
+
+Every frame built by :mod:`arm_protocol` goes out one command at a time. The
+commands behave the same way, including ``pick`` (``D,<slot>``): each waits for
+the Arduino's ``OK`` / ``CYCLE_COMPLETE`` or ``ERR,<reason>`` / ``CYCLE_ABORTED``
+before another command is accepted, and reports it on ``/arm/done`` as ``<id>``
+or ``<id>:error``. Progress lines (``PICKUP_START`` ...) are ignored."""
 
 from __future__ import annotations
 
@@ -156,11 +162,15 @@ class ArmControllerNode(Node):
 
     def _handle_line(self, line: str) -> None:
         """React to one Arduino reply line."""
-        if line == "READY":
+        if line in ("READY", "ARM_READY"):
             self._status = "available"
             self.get_logger().info("Arm hardware is ready.")
-        elif line == "OK" and self._pending:
+        elif line in ("OK", "CYCLE_COMPLETE") and self._pending:
             self._publish_done(self._pending.popleft(), ok=True)
+        elif line == "CYCLE_ABORTED":
+            self.get_logger().error("Arduino aborted the pick cycle.")
+            if self._pending:
+                self._publish_done(self._pending.popleft(), ok=False)
         elif line == "ERR,bad_calibration":
             self.get_logger().error("Arduino refused its calibration; arm disabled.")
             self._status = "unavailable"

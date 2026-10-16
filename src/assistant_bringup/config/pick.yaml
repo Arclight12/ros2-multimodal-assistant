@@ -1,0 +1,15 @@
+# Gaze/voice pick path: the object chosen by gaze or voice (/final_selection)
+# is sent to the Arduino as a slot label, and the firmware does the fetching.
+# The label is the INDEX of a class in pick_classes, so keep this order in step
+# with the slots in the arm firmware. Demo layout:
+# slot 0 = toy, 1 = eraser, 2 = pen, 3 = phone. These names must equal the class
+# names of the detector model (models/object_detection/object_detector.pt) and
+# the words in voice_command.DEFAULT_ALIASES.
+pick_trigger_node:
+  ros__parameters:
+    pick_classes: ["toy", "eraser", "pen", "phone"]
+    # Seconds after a pick finishes before another selection is accepted.
+    rearm_gap_s: 3.0
+    # Safety: false publishes the label only; true also moves the arm.
+    auto_pick: false
+    arm_command_timeout_s: 40.0
