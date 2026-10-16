@@ -43,6 +43,18 @@ def render_overlay(
     """Return a copy of ``frame`` with boxes, the gaze dot and the target marked."""
     out = frame.copy()
     height, width = out.shape[:2]
+    mean = float(out.mean())
+    if mean < 70 or mean > 215:
+        problem = "DARK" if mean < 70 else "OVEREXPOSED"
+        cv2.putText(
+            out,
+            f"{problem} FRAME (mean {mean:.0f}) - fix phone lighting/aim",
+            (20, 60),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.8, width / 1200),
+            (0, 140, 255),
+            3,
+        )
     for box in boxes:
         chosen = box["object_id"] == selected_id
         color = GREEN if chosen else YELLOW

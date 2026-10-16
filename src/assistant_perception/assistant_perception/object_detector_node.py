@@ -16,9 +16,19 @@ except ImportError:  # pragma: no cover - optional runtime dependency
     CvBridge = None
 
 try:
+    import cv2
+except ImportError:  # pragma: no cover - optional runtime dependency
+    cv2 = None
+
+try:
     from ultralytics import YOLO
 except ImportError:  # pragma: no cover - optional runtime dependency
     YOLO = None
+
+
+DARK_MEAN = 70.0
+BRIGHT_MEAN = 215.0
+TARGET_MEAN = 110.0
 
 
 class ObjectDetectorNode(Node):
@@ -99,7 +109,9 @@ class ObjectDetectorNode(Node):
         if self._mock_mode or self._model is None or self._bridge is None:
             return
         try:
-            frame = self._bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
+            frame = self._check_exposure(
+                self._bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
+            )
             results = self._model(
                 frame,
                 conf=self._confidence,
@@ -109,6 +121,22 @@ class ObjectDetectorNode(Node):
             self._publish_results(message, results[0])
         except Exception as exc:  # noqa: BLE001 - third-party inference boundary
             self.get_logger().error(f"Object inference failed: {exc}")
+
+    def _check_exposure(self, frame):
+        """Warn about unusable lighting and brighten dim frames before inference."""
+        if cv2 is None:
+            return frame
+        mean = float(frame.mean())
+        if mean < DARK_MEAN or mean > BRIGHT_MEAN:
+            problem = "dark" if mean < DARK_MEAN else "overexposed"
+            self.get_logger().warning(
+                f"Workspace frame is {problem} (mean {mean:.0f}/255): light the "
+                "table, uncover the lens, and aim away from windows and lamps.",
+                throttle_duration_sec=5.0,
+            )
+        if 1.0 < mean < DARK_MEAN:
+            return cv2.convertScaleAbs(frame, alpha=min(TARGET_MEAN / mean, 4.0))
+        return frame
 
     def _publish_results(self, image: Image, result) -> None:
         """Translate one Ultralytics result to the shared detection message."""
