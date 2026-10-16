@@ -22,7 +22,10 @@ laptop webcam -> /gaze/image_raw -> gaze_estimation_node -> /gaze/point
 - `/final_selection` (`ObjectSelection`) carries `object_id`, `class_name`,
   `image_center` (px), `workspace_center`, `has_workspace_pose` and the robot
   `target_pose` (only valid after calibration).
-- Voice input was removed completely.
+- Voice: on — `voice_node` sends the phone's IP Webcam mic audio
+  (`http://<phone-ip>:8080/audio.wav`) to NVIDIA's hosted speech NIM over gRPC;
+  `NVIDIA_API_KEY` must be exported before launch, and it publishes the
+  recognized class on `/voice/object_id` (see `docs/voice.md`).
 
 ## Hardware and network (this setup)
 
@@ -83,7 +86,7 @@ Repo on the Pi: `~/ros2-multimodal-assistant`, venv `~/robot-venv`.
    phone image for ~1 s -> `SELECTED <id> (<class>)` with coordinates.
 6. Laptop: see what the Pi sees (yellow = detection, green = selected, red ring = gaze):
    ```powershell
-   pscp nishanth@10.71.243.194:/tmp/flow.jpg .
+   pscp nishanth@10.71.243.194:/tmp/flow.jpg "captures/flow_$(Get-Date -Format HHmmss).jpg"
    ```
 7. Stop: Ctrl+C everywhere, then `sudo shutdown now` on the Pi.
 

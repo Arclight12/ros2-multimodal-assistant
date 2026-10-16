@@ -44,6 +44,7 @@ python3 scripts/check_cameras.py \
 ```
 
 See [docs/setup.md](docs/setup.md) and [docs/calibration.md](docs/calibration.md).
+Voice input is documented in [docs/voice.md](docs/voice.md).
 
 ## Training
 
