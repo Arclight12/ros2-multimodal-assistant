@@ -16,6 +16,7 @@ except ImportError:  # pragma: no cover - optional hardware dependency
     serial = None
 
 from .arm_protocol import command_frame, parse_command
+from .workspace_checks import clamp_command, load_channel_limits
 
 # The Uno resets when the port opens, so wait for its READY line.
 READY_TIMEOUT_S = 6.0
@@ -29,17 +30,15 @@ class ArmControllerNode(Node):
         self.declare_parameter("serial_port", "")
         self.declare_parameter("baudrate", 115200)
         self.declare_parameter("mock_mode", True)
-        self.declare_parameter("servo_offsets_deg", [90.0, 90.0, 90.0, 90.0])
-        self.declare_parameter("servo_signs", [1.0, 1.0, 1.0, 1.0])
         self._serial_port = os.path.expanduser(
             str(self.get_parameter("serial_port").value)
         )
         self._baudrate = int(self.get_parameter("baudrate").value)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
-        self._offsets = [
-            float(v) for v in self.get_parameter("servo_offsets_deg").value
-        ]
-        self._signs = [float(v) for v in self.get_parameter("servo_signs").value]
+        # robot.yaml channel_limits: last ROS-side clamp before the Arduino,
+        # which keeps its own out_of_range check as the final gate.
+        self._channel_limits = load_channel_limits(self)
+        self._clamp_logged = False
         self._serial = None
         self._status = "unavailable"
         self._opened_at = 0.0
@@ -81,10 +80,17 @@ class ArmControllerNode(Node):
         self._status = "connecting"
 
     def _on_command(self, message: String) -> None:
-        """Validate and execute one hardware-neutral command."""
+        """Validate, clamp and execute one hardware-neutral command."""
         try:
             command = parse_command(message.data)
-            frame = command_frame(command, self._offsets, self._signs)
+            command, notes = clamp_command(command, self._channel_limits)
+            if notes and not self._clamp_logged:
+                self._clamp_logged = True
+                self.get_logger().warning(
+                    "Clamped an arm command into the robot.yaml channel limits: "
+                    + ", ".join(notes)
+                )
+            frame = command_frame(command)
         except ValueError as exc:  # includes json.JSONDecodeError
             self.get_logger().error(f"Rejected malformed arm command: {exc}")
             self._publish_done(command_id_of(message.data), ok=False)
@@ -134,9 +140,10 @@ class ArmControllerNode(Node):
             self.get_logger().info("Arm hardware is ready.")
         elif line == "OK" and self._pending:
             self._publish_done(self._pending.popleft(), ok=True)
-        elif line.startswith("ERR") and self._pending:
-            self.get_logger().error(f"Arduino rejected command: {line}")
-            self._publish_done(self._pending.popleft(), ok=False)
+        elif line.startswith("ERR"):
+            self.get_logger().error(f"Arduino reported: {line}")
+            if self._pending:
+                self._publish_done(self._pending.popleft(), ok=False)
 
     def _publish_done(self, command_id, ok: bool) -> None:
         """Acknowledge one command so the planner can sequence stages."""

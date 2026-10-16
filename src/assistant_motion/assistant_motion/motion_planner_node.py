@@ -17,9 +17,8 @@ from std_msgs.msg import String
 from assistant_msgs.action import ExecuteGrasp
 from assistant_msgs.msg import DetectedObjectArray, ObjectSelection
 
-from .arm_kinematics import ArmGeometry, solve_ik
 from .grasp_safety import GraspSafetyState, validate_real_grasp
-from .workspace_checks import valid_pose
+from .workspace_checks import arm_target, clamp_command, load_channel_limits, valid_pose
 
 
 class MotionPlannerNode(Node):
@@ -32,13 +31,11 @@ class MotionPlannerNode(Node):
         self.declare_parameter("workspace_width_m", 0.4)
         self.declare_parameter("workspace_height_m", 0.3)
         self.declare_parameter("detection_timeout_seconds", 1.0)
-        self.declare_parameter("pregrasp_offset_m", 0.04)
-        self.declare_parameter("arm_command_timeout_s", 15.0)
-        defaults = ArmGeometry()
-        self.declare_parameter("arm_shoulder_height_m", defaults.shoulder_height_m)
-        self.declare_parameter("arm_upper_arm_m", defaults.upper_arm_m)
-        self.declare_parameter("arm_forearm_m", defaults.forearm_m)
-        self.declare_parameter("arm_gripper_m", defaults.gripper_m)
+        self.declare_parameter("arm_command_timeout_s", 30.0)
+        # Must not be wider than the firmware's calibrated grid.
+        self.declare_parameter("arm_reach_min_m", 0.0)
+        self.declare_parameter("arm_reach_max_m", 0.0)
+        self.declare_parameter("arm_base_limit_deg", 40.0)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
         self._motion_enabled = bool(self.get_parameter("motion_enabled").value)
         self._workspace_width = float(self.get_parameter("workspace_width_m").value)
@@ -46,14 +43,13 @@ class MotionPlannerNode(Node):
         self._detection_timeout = float(
             self.get_parameter("detection_timeout_seconds").value
         )
-        self._pregrasp_offset = float(self.get_parameter("pregrasp_offset_m").value)
         self._command_timeout = float(self.get_parameter("arm_command_timeout_s").value)
-        self._geometry = ArmGeometry(
-            shoulder_height_m=float(self.get_parameter("arm_shoulder_height_m").value),
-            upper_arm_m=float(self.get_parameter("arm_upper_arm_m").value),
-            forearm_m=float(self.get_parameter("arm_forearm_m").value),
-            gripper_m=float(self.get_parameter("arm_gripper_m").value),
-        )
+        self._reach_min = float(self.get_parameter("arm_reach_min_m").value)
+        self._reach_max = float(self.get_parameter("arm_reach_max_m").value)
+        self._base_limit = float(self.get_parameter("arm_base_limit_deg").value)
+        # robot.yaml channel_limits: the pulses every arm command is clamped to.
+        self._channel_limits = load_channel_limits(self)
+        self._clamp_logged = False
         self._command_id = 0
         self._done: set[str] = set()
         self._done_cond = threading.Condition()
@@ -217,30 +213,34 @@ class MotionPlannerNode(Node):
         )
 
     def _plan_stages(self, pose) -> list[tuple[str, dict]] | None:
-        """Solve IK for every waypoint up front; None if any is unreachable."""
-        above = (pose[0], pose[1], pose[2] + self._pregrasp_offset)
-        pregrasp = solve_ik(*above, geometry=self._geometry)
-        grasp = solve_ik(*pose, geometry=self._geometry)
-        if pregrasp is None or grasp is None:
+        """Build the stages for a table-top target; None if out of the arm's range."""
+        target = arm_target(
+            pose,
+            self._reach_min,
+            self._reach_max,
+            self._base_limit,
+            self._channel_limits,
+        )
+        if target is None:
             return None
+        base_deg, reach_mm = target
 
-        def move(angles) -> dict:
+        def move(level: int) -> dict:
             return {
-                "command": "move_joints",
-                "angles": [
-                    angles.base,
-                    angles.shoulder,
-                    angles.elbow,
-                    angles.wrist,
-                ],
+                "command": "move_to",
+                "base_deg": base_deg,
+                "reach_mm": reach_mm,
+                "level": level,
             }
 
+        # The first H after an Uno reset snaps to home: the arm must start there.
         return [
+            ("homing", {"command": "home"}),
             ("opening_gripper", {"command": "open_gripper"}),
-            ("moving_to_pregrasp", move(pregrasp)),
-            ("approaching", move(grasp)),
+            ("moving_to_pregrasp", move(1)),
+            ("approaching", move(0)),
             ("closing_gripper", {"command": "close_gripper"}),
-            ("lifting", move(pregrasp)),
+            ("lifting", move(1)),
             ("returning", {"command": "home"}),
         ]
 
@@ -263,6 +263,15 @@ class MotionPlannerNode(Node):
 
     def _publish_command(self, command: dict) -> None:
         """Send a hardware-neutral command to the arm adapter."""
+        command, notes = clamp_command(
+            command, self._channel_limits, (self._reach_min, self._reach_max)
+        )
+        if notes and not self._clamp_logged:
+            self._clamp_logged = True
+            self.get_logger().warning(
+                "Clamped an arm command into the robot.yaml channel limits: "
+                + ", ".join(notes)
+            )
         self._command_publisher.publish(String(data=json.dumps(command)))
 
     @staticmethod

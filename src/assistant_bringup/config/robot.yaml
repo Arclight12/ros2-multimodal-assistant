@@ -3,20 +3,37 @@ motion_planner_node:
     # Real motion is refused unless this is true (and mock_mode is false).
     motion_enabled: false
     detection_timeout_seconds: 1.0
-    pregrasp_offset_m: 0.04
-    arm_command_timeout_s: 15.0
-    # Arm geometry in metres. Placeholders from the URDF: MEASURE YOUR ARM.
-    arm_shoulder_height_m: 0.035
-    arm_upper_arm_m: 0.10
-    arm_forearm_m: 0.08
-    arm_gripper_m: 0.11
+    arm_command_timeout_s: 30.0
+    # Reach of the calibrated grid in firmware/arm_controller/arm_calibration.h
+    # (first and last REACH_MM, in metres) and the base sweep either side of
+    # straight ahead. A target outside them by more than the clamp margin is
+    # refused; a slight overshoot is clamped onto the nearest safe pose.
+    # The grid is still the placeholder single column at REACH_MM[0] = 0, so
+    # 0.0 / 0.0 refuses every real grasp until that grid is filled in.
+    arm_reach_min_m: 0.0
+    arm_reach_max_m: 0.0
+    arm_base_limit_deg: 40.0
+    # Servo travel per PCA9685 channel in pulse counts: ch0 base, ch1 + ch2
+    # coupled linkage, ch3 gripper. Same numbers as PULSE_MIN / PULSE_MAX /
+    # PULSE_CENTER in arm_protocol.py and arm_calibration.h. The planner clamps
+    # the base (ch0) pulse and the reach before sending; the Arduino keeps its
+    # own out_of_range check as the final gate.
+    channel_limits:
+      0: {min: 225, max: 389, center: 307}
+      1: {min: 225, max: 389, center: 307}
+      2: {min: 225, max: 389, center: 307}
+      3: {min: 225, max: 389, center: 307}
 
 arm_controller_node:
   ros__parameters:
     # Pi: usually /dev/ttyACM0 (user must be in the dialout group).
-    serial_port: ""
+    serial_port: /dev/ttyACM0
     baudrate: 115200
-    # servo_deg = offset + sign * degrees(joint_angle); order:
-    # base, shoulder, elbow, wrist. Calibrate with the arm unloaded.
-    servo_offsets_deg: [90.0, 90.0, 90.0, 90.0]
-    servo_signs: [1.0, 1.0, 1.0, 1.0]
+    # Last ROS-side clamp before the serial port; keep in step with the block
+    # above. ch1/ch2/ch3 pulses come from the firmware grid, so only the ch0
+    # base pulse can be clamped here.
+    channel_limits:
+      0: {min: 225, max: 389, center: 307}
+      1: {min: 225, max: 389, center: 307}
+      2: {min: 225, max: 389, center: 307}
+      3: {min: 225, max: 389, center: 307}

@@ -4,28 +4,19 @@ from __future__ import annotations
 
 import json
 import math
-from typing import Any, Sequence
+from typing import Any
 
-SERVO_MIN_DEG = 0.0
-SERVO_MAX_DEG = 180.0
 _SIMPLE_FRAMES = {"home": "H", "open_gripper": "O", "close_gripper": "C"}
 
-
-def joints_to_servo_degrees(
-    angles: Sequence[float],
-    offsets_deg: Sequence[float],
-    signs: Sequence[float],
-) -> list[float]:
-    """Map model joint angles (rad) to servo degrees per joint."""
-    if not len(angles) == len(offsets_deg) == len(signs) == 4:
-        raise ValueError("expected four angles, offsets and signs")
-    degrees = []
-    for angle, offset, sign in zip(angles, offsets_deg, signs):
-        value = float(offset) + float(sign) * math.degrees(float(angle))
-        if not math.isfinite(value) or not (SERVO_MIN_DEG <= value <= SERVO_MAX_DEG):
-            raise ValueError(f"servo angle {value} is outside 0..180")
-        degrees.append(value)
-    return degrees
+# PCA9685 pulse counts, mirroring firmware/arm_controller/arm_calibration.h.
+# Channel order: ch0 base, ch1 + ch2 coupled linkage, ch3 gripper.
+PULSE_MIN = 225
+PULSE_MAX = 389
+PULSE_CENTER = 307
+# The firmware's BASE_COUNTS_PER_DEG; the base is the one channel whose pulse
+# this side can compute from a command, so it is the one we can clamp.
+BASE_COUNTS_PER_DEG = 2.0
+CHANNELS = (0, 1, 2, 3)
 
 
 def parse_command(payload: str) -> dict[str, Any]:
@@ -36,19 +27,29 @@ def parse_command(payload: str) -> dict[str, Any]:
     return command
 
 
-def command_frame(
-    command: dict[str, Any],
-    offsets_deg: Sequence[float],
-    signs: Sequence[float],
-) -> str:
+def command_frame(command: dict[str, Any]) -> str:
     """Return the newline-terminated serial frame for one command."""
     name = command["command"]
     if name in _SIMPLE_FRAMES:
         return _SIMPLE_FRAMES[name] + "\n"
-    if name != "move_joints":
+    if name != "move_to":
         raise ValueError(f"unknown command {name!r}")
-    angles = command.get("angles")
-    if not isinstance(angles, (list, tuple)) or len(angles) != 4:
-        raise ValueError("move_joints requires four joint angles")
-    degrees = joints_to_servo_degrees(angles, offsets_deg, signs)
-    return "J," + ",".join(f"{value:.1f}" for value in degrees) + "\n"
+    try:
+        base_deg = float(command["base_deg"])
+        reach_mm = float(command["reach_mm"])
+        level = int(command["level"])
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError("move_to needs base_deg, reach_mm and level") from exc
+    if not (math.isfinite(base_deg) and math.isfinite(reach_mm) and level in (0, 1)):
+        raise ValueError("move_to values are invalid")
+    return f"P,{base_deg:.1f},{reach_mm:.1f},{level}\n"
+
+
+def base_deg_to_pulse(base_deg: float) -> int:
+    """Return the ch0 pulse the firmware would use for this base angle."""
+    return int(round(PULSE_CENTER + base_deg * BASE_COUNTS_PER_DEG))
+
+
+def pulse_to_base_deg(pulse: int) -> float:
+    """Return the base angle for a ch0 pulse (the inverse mapping)."""
+    return (pulse - PULSE_CENTER) / BASE_COUNTS_PER_DEG
