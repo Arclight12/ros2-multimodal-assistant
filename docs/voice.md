@@ -38,6 +38,12 @@ on, battery optimisation off for the app.
 | `nvidia_function_id` | which hosted ASR model; copy from its build.nvidia.com API page |
 | `voice_min_rms` | loudness that counts as speech; raise it in a noisy room |
 | `voice_end_silence_ms`, `voice_max_utterance_s` | end-of-speech quiet time (600 ms), longest utterance (6 s) |
+| `voice_max_words` | transcripts longer than this are ambient speech (video, conversation) and are ignored; 8 by default, 0 = off |
+| `voice_repeat_cooldown_s` | do not republish the same class within this many seconds; 2.0 by default, 0 = off |
+| `voice_min_confidence` | drop transcripts below this ASR confidence; 0 = off because streaming confidence is often 0.0 |
+
+Every transcript is logged at INFO as `Heard '<text>' (conf <x.xx>)` before
+matching, so the log shows what the ASR heard even when nothing is published.
 
 Mock mode starts nothing. Test the selection path by hand:
 

@@ -2,6 +2,7 @@
 
 Pure OpenCV/NumPy so it is testable without ROS. Boxes are dicts with
 ``object_id, class_name, confidence, x, y, w, h`` (pixel centre and size).
+An optional ``selection`` adds a thick box plus coordinate banner for the pick.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from typing import Any
 GREEN = (0, 200, 0)
 YELLOW = (0, 220, 255)
 RED = (0, 0, 255)
+MAGENTA = (255, 0, 255)
 
 
 def describe_selection(selection: dict[str, Any]) -> str:
@@ -33,14 +35,80 @@ def describe_selection(selection: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _banner_lines(selection: dict[str, Any]) -> list[str]:
+    """Four short lines: what was picked, image px, workspace m, robot m."""
+    point = selection.get("workspace_xy")
+    workspace = (
+        f"workspace m ({point[0]:.3f}, {point[1]:.3f})"
+        if point is not None
+        else "workspace n/a"
+    )
+    p = selection.get("robot_xyz")
+    robot = (
+        f"robot m ({p[0]:.3f}, {p[1]:.3f}, {p[2]:.3f})"
+        if p is not None
+        else "robot n/a"
+    )
+    return [
+        f"{str(selection['source']).upper()} {selection['object_id']} "
+        f"({selection['class_name']}) {selection['confidence']:.2f}",
+        f"img px ({selection['image_x']:.0f}, {selection['image_y']:.0f})",
+        workspace,
+        robot,
+    ]
+
+
+def _draw_banner(
+    cv2: Any,
+    out: Any,
+    lines: list[str],
+    anchor: tuple[int, int],
+    color: tuple[int, int, int],
+    width: int,
+    height: int,
+) -> None:
+    """Filled text block centred on ``anchor``: above it, or below if it clips."""
+    scale = max(0.6, width / 1600)
+    thickness = 2
+    sizes = [
+        cv2.getTextSize(line, cv2.FONT_HERSHEY_SIMPLEX, scale, thickness)[0]
+        for line in lines
+    ]
+    line_h = max(h for _, h in sizes) + 12
+    block_w = max(w for w, _ in sizes) + 16
+    block_h = line_h * len(lines) + 8
+    x0 = int(min(max(anchor[0] - block_w // 2, 0), max(width - block_w, 0)))
+    top = int(anchor[1] - block_h)
+    if top < 0:
+        top = int(anchor[1])
+    top = int(min(max(top, 0), max(height - block_h, 0)))
+    cv2.rectangle(out, (x0, top), (x0 + block_w, top + block_h), color, -1)
+    for index, (text, (_, text_h)) in enumerate(zip(lines, sizes, strict=True)):
+        cv2.putText(
+            out,
+            text,
+            (x0 + 8, top + 8 + line_h * index + text_h),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            scale,
+            (0, 0, 0),
+            thickness,
+        )
+
+
 def render_overlay(
     cv2: Any,
     frame: Any,
     boxes: list[dict[str, Any]],
     gaze: tuple[float, float, bool] | None,
     selected_id: str | None,
+    selection: dict[str, Any] | None = None,
 ) -> Any:
-    """Return a copy of ``frame`` with boxes, the gaze dot and the target marked."""
+    """Return a copy of ``frame`` with boxes, the gaze dot and the target marked.
+
+    ``selection`` (optional) is the freshest pick: its box gets a thick border in
+    the source colour plus a coordinate banner, or a crosshair when its box has
+    already left ``boxes``.
+    """
     out = frame.copy()
     height, width = out.shape[:2]
     mean = float(out.mean())
@@ -83,4 +151,24 @@ def render_overlay(
         )
         cv2.circle(out, center, 22, color, 4)
         cv2.circle(out, center, 4, color, -1)
+    if selection is not None:
+        color = MAGENTA if str(selection["source"]).lower() == "voice" else GREEN
+        match = next(
+            (box for box in boxes if box["object_id"] == selection["object_id"]), None
+        )
+        if match is not None:
+            x0 = int(match["x"] - match["w"] / 2)
+            y0 = int(match["y"] - match["h"] / 2)
+            x1 = int(match["x"] + match["w"] / 2)
+            y1 = int(match["y"] + match["h"] / 2)
+            cv2.rectangle(out, (x0, y0), (x1, y1), color, 8)
+            anchor = ((x0 + x1) // 2, y0)
+        else:
+            half = 15
+            cx = int(selection["image_x"])
+            cy = int(selection["image_y"])
+            cv2.line(out, (cx - half, cy), (cx + half, cy), color, 4)
+            cv2.line(out, (cx, cy - half), (cx, cy + half), color, 4)
+            anchor = (cx, cy)
+        _draw_banner(cv2, out, _banner_lines(selection), anchor, color, width, height)
     return out

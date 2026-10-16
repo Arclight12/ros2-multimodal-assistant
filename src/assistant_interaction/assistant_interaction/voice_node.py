@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import queue
 import threading
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -40,6 +41,11 @@ class VoiceNode(Node):
         self.declare_parameter("voice_max_utterance_s", 6.0)
         self.declare_parameter("voice_reconnect_base_delay_s", 1.0)
         self.declare_parameter("voice_reconnect_max_delay_s", 30.0)
+        # Ambient speech (a video, a conversation) is longer than a command.
+        self.declare_parameter("voice_max_words", 8)
+        self.declare_parameter("voice_repeat_cooldown_s", 2.0)
+        # Off by default: streaming confidence is often absent and reads 0.0.
+        self.declare_parameter("voice_min_confidence", 0.0)
         get = lambda name: self.get_parameter(name).value  # noqa: E731
         self._url = str(get("voice_stream_url"))
         self._open_timeout = float(get("voice_open_timeout_s"))
@@ -52,6 +58,11 @@ class VoiceNode(Node):
         )
         self._base_delay = float(get("voice_reconnect_base_delay_s"))
         self._max_delay = float(get("voice_reconnect_max_delay_s"))
+        self._max_words = int(get("voice_max_words"))
+        self._cooldown_s = float(get("voice_repeat_cooldown_s"))
+        self._min_confidence = float(get("voice_min_confidence"))
+        self._last_class = ""
+        self._last_publish = 0.0
         self._publisher = self.create_publisher(String, "/voice/object_id", 10)
         self._stop = threading.Event()
         self._threads: list[threading.Thread] = []
@@ -147,27 +158,57 @@ class VoiceNode(Node):
             except queue.Empty:
                 continue
             try:
-                text = self._transcribe(pcm)
+                text, confidence = self._transcribe(pcm)
             except Exception as exc:  # noqa: BLE001 - grpc raises its own types
                 self.get_logger().warning(f"NVIDIA speech request failed: {exc}")
+                continue
+            self.get_logger().info(f"Heard '{text}' (conf {confidence:.2f})")
+            words = len(text.split())
+            if self._max_words and words > self._max_words:
+                self.get_logger().info(f"Ignored long speech ({words} words)")
+                continue
+            if self._min_confidence > 0.0 and confidence < self._min_confidence:
+                self.get_logger().info(
+                    f"Ignored '{text}': conf {confidence:.2f} "
+                    f"below {self._min_confidence:.2f}"
+                )
                 continue
             class_name = match_class(text)
             if class_name is None:
                 self.get_logger().info(f"Heard '{text}': no object matched.")
                 continue
             self.get_logger().info(f"Heard '{text}' -> {class_name}")
+            if self._cooldown_s > 0.0:
+                now = time.monotonic()
+                if class_name == self._last_class and (
+                    now - self._last_publish < self._cooldown_s
+                ):
+                    self.get_logger().info(
+                        f"Suppressed repeat of '{class_name}' within "
+                        f"{self._cooldown_s:g} s cooldown"
+                    )
+                    continue
+            self._last_class = class_name
+            self._last_publish = time.monotonic()
             self._publisher.publish(String(data=class_name))
 
-    def _transcribe(self, pcm: bytes) -> str:
-        """Stream one utterance in 100 ms chunks; the channel stays open."""
+    def _transcribe(self, pcm: bytes) -> tuple[str, float]:
+        """Stream one utterance in 100 ms chunks; the channel stays open.
+
+        Returns the joined transcript and the mean ASR confidence (0.0 when
+        the streaming results carry none).
+        """
         step = TARGET_RATE // 10 * 2
         chunks = (pcm[i : i + step] for i in range(0, len(pcm), step))
-        return " ".join(
-            result.alternatives[0].transcript.strip()
+        finals = [
+            result.alternatives[0]
             for response in self._asr.streaming_response_generator(chunks, self._config)
             for result in response.results
             if result.is_final
-        ).strip()
+        ]
+        text = " ".join(alt.transcript.strip() for alt in finals).strip()
+        confs = [float(getattr(alt, "confidence", 0.0) or 0.0) for alt in finals]
+        return text, sum(confs) / len(confs) if confs else 0.0
 
     def _delay(self, attempt: int) -> float:
         return retry_delay_s(attempt, self._base_delay, self._max_delay)

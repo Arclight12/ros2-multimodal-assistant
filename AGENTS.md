@@ -15,11 +15,22 @@ can. The goal is to keep the orchestrator's context small.
 
 | Name | Model | Use for |
 |---|---|---|
-| DeepSeek | `opencode/deepseek-v4.1-flash-free` | default worker: code and doc edits, Pi deploy and checks, builds, tests |
-| Nemotron | `opencode/nemotron-3.5-super-vl-free` | review of a finished change, reading images or screenshots, second opinion |
+| DeepSeek | `opencode/deepseek-v4.1-flash-free` | code and doc edits, Pi deploy and checks, builds, tests |
+| Nemotron | `opencode/nemotron-3.5-super-vl-free` | the same kinds of work, plus anything with images or screenshots |
 
 Pick the model with `target:{providerInstanceId:"opencode", model:"..."}`. Both
 are free; run independent jobs in parallel (at most 3).
+
+**Keep the load balanced.** Both models are equal workers, so do not send
+everything to one:
+- Give each new job to the model that has had fewer jobs this session; with a
+  tie, alternate. When running two or three jobs at once, split them across both
+  models.
+- Review a change with the other model than the one that wrote it.
+- Move a job to the other model after one failure or a rate limit, instead of
+  retrying the same one.
+- Name the model in each task title (e.g. "DeepSeek: ...", "Nemotron: ...") so
+  the split is visible.
 
 **Do it yourself** when the task is:
 - a read or edit of one or two known files, or a single small command;

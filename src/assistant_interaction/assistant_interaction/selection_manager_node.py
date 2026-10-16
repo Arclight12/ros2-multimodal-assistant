@@ -49,6 +49,8 @@ class SelectionManagerNode(Node):
             self.get_parameter("voice_priority_seconds").value
         )
         self._voice_selected_at: float | None = None
+        self._pending_voice_class: str | None = None
+        self._last_voice_warning: float | None = None
         self._gaze: GazePoint | None = None
         self._detections: DetectedObjectArray | None = None
         self._publisher = self.create_publisher(ObjectSelection, "/final_selection", 10)
@@ -68,6 +70,9 @@ class SelectionManagerNode(Node):
     def _on_voice(self, message: String) -> None:
         """Select a spoken class immediately; voice outranks gaze."""
         class_name = message.data.strip().lower()
+        now = self._now()
+        self._voice_selected_at = now
+        self._pending_voice_class = class_name
         if self._detections is None:
             self.get_logger().warning(
                 f"Voice asked for '{class_name}' but nothing is detected yet."
@@ -86,12 +91,35 @@ class SelectionManagerNode(Node):
             self._config,
         )
         if match is None:
-            self.get_logger().warning(
-                f"Voice asked for '{class_name}' but it is not visible."
-            )
+            self._log_voice_unavailable(class_name)
             return
-        self._voice_selected_at = self._now()
+        self._pending_voice_class = None
         self._publish_selection(match, "voice", match.confidence)
+
+    def _log_voice_unavailable(self, class_name: str) -> None:
+        """Rate-limited warning when a voiced class has no live detection."""
+        now = self._now()
+        if (
+            self._last_voice_warning is not None
+            and now - self._last_voice_warning < 5.0
+        ):
+            return
+        self._last_voice_warning = now
+        if self._detections is None:
+            visible = []
+        else:
+            visible = sorted(
+                {
+                    item.class_name
+                    for item in self._detections.objects
+                    if item.class_name
+                }
+            )
+        names = ", ".join(visible) if visible else "none"
+        self.get_logger().warning(
+            f"Voice asked for '{class_name}' but it is not visible. "
+            f"Visible classes: {names}."
+        )
 
     def _now(self) -> float:
         return self.get_clock().now().nanoseconds / 1_000_000_000.0
@@ -108,14 +136,9 @@ class SelectionManagerNode(Node):
 
     def _try_select(self) -> None:
         """Run confidence, distance, and temporal selection gates."""
-        if self._gaze is None or self._detections is None:
+        if self._detections is None:
             return
-        gaze = GazeObservation(
-            x=float(self._gaze.x),
-            y=float(self._gaze.y),
-            confidence=float(self._gaze.confidence),
-            valid=bool(self._gaze.valid),
-        )
+        now = self._now()
         observations = [
             self._to_observation(
                 item,
@@ -124,8 +147,31 @@ class SelectionManagerNode(Node):
             )
             for item in self._detections.objects
         ]
+        if self._pending_voice_class is not None:
+            if (
+                self._voice_selected_at is None
+                or now - self._voice_selected_at >= self._voice_priority_s
+            ):
+                self._pending_voice_class = None
+            else:
+                match = select_by_class(
+                    self._pending_voice_class,
+                    observations,
+                    self._config,
+                )
+                if match is not None:
+                    self._pending_voice_class = None
+                    self._publish_selection(match, "voice", match.confidence)
+                    return
+        if self._gaze is None:
+            return
+        gaze = GazeObservation(
+            x=float(self._gaze.x),
+            y=float(self._gaze.y),
+            confidence=float(self._gaze.confidence),
+            valid=bool(self._gaze.valid),
+        )
         candidate = nearest_valid_detection(gaze, observations, self._config)
-        now = self._now()
         confirmed = self._selector.update(candidate, now)
         if confirmed is None:
             return
@@ -196,6 +242,18 @@ class SelectionManagerNode(Node):
             message.target_pose.orientation.w = 1.0
             message.has_target_pose = True
         self._publisher.publish(message)
+        if source == "voice":
+            workspace_text = (
+                f"({detection.workspace_xy[0]:.1f},{detection.workspace_xy[1]:.1f})"
+                if detection.workspace_xy is not None
+                else "None"
+            )
+            self.get_logger().info(
+                f"Voice selected {detection.class_name} {detection.object_id} "
+                f"image=({detection.image_x:.1f},{detection.image_y:.1f}) "
+                f"workspace={workspace_text} "
+                f"has_workspace_pose={detection.workspace_xy is not None}"
+            )
         self.get_logger().info(
             f"Confirmed {source} selection: {detection.object_id} "
             f"[{detection.class_name}] (confidence={message.confidence:.2f})"

@@ -19,3 +19,9 @@ voice_node:
     voice_max_utterance_s: 6.0
     voice_reconnect_base_delay_s: 1.0
     voice_reconnect_max_delay_s: 30.0
+    # Longer transcripts are ambient speech and are ignored; 0 = off.
+    voice_max_words: 8
+    # Ignore a repeat of the same class published this many seconds ago; 0 = off.
+    voice_repeat_cooldown_s: 2.0
+    # Drop transcripts below this ASR confidence; 0 = off (streaming returns 0.0).
+    voice_min_confidence: 0.0
