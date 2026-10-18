@@ -97,10 +97,6 @@ class CalibrationNode(Node):
             response.calibrated = False
             response.message = "Mock calibration is intentionally not valid for motion."
             return response
-        if not self._transform_configured:
-            return self._refuse(
-                response, "workspace-to-base transform is not configured"
-            )
         if cv2 is None or np is None or self._bridge is None:
             return self._refuse(response, "OpenCV, NumPy, or cv_bridge is unavailable")
         if self._latest_image is None:
@@ -133,7 +129,13 @@ class CalibrationNode(Node):
             return self._refuse(response, f"failed to save calibration: {exc}")
         response.success = True
         response.calibrated = True
-        response.message = f"Workspace calibration saved to {self._path}."
+        if self._transform_configured:
+            response.message = f"Full workspace and robot-base calibration saved to {self._path}."
+        else:
+            response.message = (
+                f"Planar workspace calibration saved to {self._path} "
+                "(robot-base transform unverified; robot poses unavailable)."
+            )
         return response
 
     def _find_homography(self, frame):

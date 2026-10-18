@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import time
+from typing import Any
 
 import rclpy
 from rclpy.node import Node
@@ -17,6 +18,7 @@ from std_msgs.msg import Int32, String
 
 from assistant_msgs.msg import ObjectSelection
 
+from .kinematics import compute_arm_pulses
 from .pick_logic import PickGate
 
 # arm_controller_node appends this to the id when a command failed.
@@ -28,9 +30,11 @@ class PickTriggerNode(Node):
 
     def __init__(self) -> None:
         super().__init__("pick_trigger_node")
-        # Edit pick_classes ORDER to match the Arduino slots: the label of a
-        # class is its index here, and slot 0..3 is what the firmware moves to.
-        self.declare_parameter("pick_classes", ["toy", "eraser", "pen", "phone"])
+        # Trained YOLO classes for tabletop manipulation
+        self.declare_parameter(
+            "pick_classes",
+            ["sharpener", "eraser", "thermocol", "block_a", "block_b", "block_c"],
+        )
         self.declare_parameter("rearm_gap_s", 3.0)
         # Safety default: labels are published, but the arm does not move.
         self.declare_parameter("auto_pick", False)
@@ -93,20 +97,58 @@ class PickTriggerNode(Node):
         self._release_at = time.monotonic() + self._command_timeout
         if not self._auto_pick:
             return
+
+        cmd_payload: dict[str, Any] | None = None
+        if message.has_workspace_pose:
+            ws_x = float(message.workspace_center.x)
+            ws_y = float(message.workspace_center.y)
+            try:
+                base_p, ch1_p, ch2_p, grip_p, dist, angle_deg = compute_arm_pulses(
+                    class_name, ws_x, ws_y
+                )
+                self.get_logger().info(
+                    f"Continuous 2D pick pose for '{class_name}' at ({ws_x:.3f}, {ws_y:.3f}) m: "
+                    f"dist={dist*100:.1f}cm, azimuth={angle_deg:.1f}deg -> "
+                    f"base={base_p}, ch1={ch1_p}, ch2={ch2_p}, gripper={grip_p}"
+                )
+                self._command_id += 1
+                self._pending_id = self._command_id
+                cmd_payload = {
+                    "id": self._command_id,
+                    "command": "pick",
+                    "base": base_p,
+                    "link1": ch1_p,
+                    "link2": ch2_p,
+                    "gripper": grip_p,
+                }
+            except ValueError as exc:
+                self.get_logger().warning(
+                    f"Continuous kinematics rejected target '{class_name}': {exc}"
+                )
+
+        if cmd_payload is None:
+            if label < 4:
+                self._command_id += 1
+                self._pending_id = self._command_id
+                cmd_payload = {
+                    "id": self._command_id,
+                    "command": "pick",
+                    "slot": label,
+                }
+            else:
+                self.get_logger().error(
+                    f"Cannot pick '{class_name}': no valid workspace pose and slot index {label} >= 4"
+                )
+                self._release_pick(time.monotonic())
+                return
+
         if self._mock_mode:
             self.get_logger().info(
-                f"mock_mode: pick label {label} logged only, no arm command sent."
+                f"mock_mode: pick payload {cmd_payload} logged only, no arm command sent."
             )
             return
-        self._command_id += 1
-        self._pending_id = self._command_id
-        self._command_publisher.publish(
-            String(
-                data=json.dumps(
-                    {"id": self._command_id, "command": "pick", "slot": label}
-                )
-            )
-        )
+
+        self._command_publisher.publish(String(data=json.dumps(cmd_payload)))
 
     def _on_arm_done(self, message: String) -> None:
         """Release the tracker when the pick we sent has finished or failed."""

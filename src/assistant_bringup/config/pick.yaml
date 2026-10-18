@@ -7,9 +7,9 @@
 # the words in voice_command.DEFAULT_ALIASES.
 pick_trigger_node:
   ros__parameters:
-    pick_classes: ["toy", "eraser", "pen", "phone"]
+    pick_classes: ["sharpener", "eraser", "thermocol", "block_a", "block_b", "block_c"]
     # Seconds after a pick finishes before another selection is accepted.
     rearm_gap_s: 3.0
     # Safety: false publishes the label only; true also moves the arm.
-    auto_pick: false
+    auto_pick: true
     arm_command_timeout_s: 40.0

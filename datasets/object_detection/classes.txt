@@ -1,0 +1,6 @@
+sharpener
+eraser
+thermocol
+block_a
+block_b
+block_c

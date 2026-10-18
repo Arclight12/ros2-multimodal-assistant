@@ -12,4 +12,4 @@ selection_manager_node:
     minimum_gaze_confidence: 0.8
     selection_grace_seconds: 0.5
     maximum_gaze_object_distance: 0.2
-    minimum_detection_confidence: 0.55
+    minimum_detection_confidence: 0.10

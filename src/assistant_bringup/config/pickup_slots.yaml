@@ -1,0 +1,45 @@
+# Discrete tabletop pickup slot targets for ROS-Multiarm-Assistant.
+# Calibrated to physical dots on the board.
+# Mapped Right-to-Left matching servo base rotation and operator slot layout:
+#   Slot 0: Far-Right (Base 230)
+#   Slot 1: Mid-Right (Base 300)
+#   Slot 2: Mid-Left  (Base 370)
+#   Slot 3: Far-Left  (Base 440)
+
+workspace:
+  width_m: 0.3115
+  height_m: 0.1500
+  table_z_m: 0.0
+
+slots:
+  - id: 0
+    label: "Slot 0 (Base 230 - Far Right)"
+    base_pulse: 230
+    x_m: 0.2796
+    y_m: 0.1151
+    radius_m: 0.0350
+    verified: true
+
+  - id: 1
+    label: "Slot 1 (Base 300 - Mid Right)"
+    base_pulse: 300
+    x_m: 0.1990
+    y_m: 0.0759
+    radius_m: 0.0350
+    verified: true
+
+  - id: 2
+    label: "Slot 2 (Base 370 - Mid Left)"
+    base_pulse: 370
+    x_m: 0.1049
+    y_m: 0.0781
+    radius_m: 0.0350
+    verified: true
+
+  - id: 3
+    label: "Slot 3 (Base 440 - Far Left)"
+    base_pulse: 440
+    x_m: 0.0279
+    y_m: 0.1153
+    radius_m: 0.0350
+    verified: true

@@ -37,10 +37,13 @@ datasets/*
 !datasets/gaze/
 datasets/gaze/*
 !datasets/gaze/.gitkeep
-!datasets/gaze/.gitkeep
 !datasets/object_detection/
+datasets/object_detection/*
 !datasets/object_detection/.gitkeep
+!datasets/object_detection/classes.txt
 imagenet-loc/
+runs/
+
 
 # Model weight files anywhere in the repo.
 *.pt

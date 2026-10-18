@@ -89,13 +89,21 @@ def test_four_markers_map_to_expected_workspace_positions(calibrated_setup):
 
 
 def test_four_markers_map_to_measured_robot_base_coordinates(calibrated_setup):
-    """Marker centres must map back to measured robot base coords within 2.0 mm tolerance."""
+    """Synthetic math validation: idealized rectangle maps back to measured coords within 2.0 mm.
+
+    CRITICAL NOTE ON NUMERICAL ACCURACY:
+    - This is a synthetic mathematical check, NOT a measured camera-localization error.
+    - The ~1.80 mm residuals at TR and BR arise purely from modeling the slightly non-rectangular
+      measured marker positions (top width 0.3130 m, bottom width 0.3100 m) as an idealized
+      rigid rectangle (0.3115 m x 0.1500 m).
+    - Physical camera calibration accuracy has NOT yet been tested on physical hardware.
+    """
     centers, calibration = calibrated_setup
 
     tolerances_mm = {
         0: 0.1,  # TL: exact match (0.0 mm)
-        1: 2.0,  # TR: 1.8 mm residual due to physical measurement differences
-        2: 2.0,  # BR: 1.8 mm residual due to physical measurement differences
+        1: 2.0,  # TR: ~1.80 mm residual due to approximating measured quadrilateral as rigid rectangle
+        2: 2.0,  # BR: ~1.80 mm residual due to approximating measured quadrilateral as rigid rectangle
         3: 0.1,  # BL: exact match (0.0 mm, origin)
     }
 
@@ -117,8 +125,39 @@ def test_four_markers_map_to_measured_robot_base_coordinates(calibrated_setup):
         )
 
     # Document the exact residual errors
-    print(f"\nMeasured corner residuals: TL={errors[0]:.2f}mm, TR={errors[1]:.2f}mm, "
+    print(f"\nSynthetic model corner residuals: TL={errors[0]:.2f}mm, TR={errors[1]:.2f}mm, "
           f"BR={errors[2]:.2f}mm, BL={errors[3]:.2f}mm")
+
+
+def test_planar_mapping_independent_of_robot_transform(calibrated_setup):
+    """Planar camera-to-workspace mapping succeeds even when robot transform is unverified."""
+    centers, full_calibration = calibrated_setup
+
+    # Create planar-only calibration with robot_transform_configured=False
+    planar_only_cal = WorkspaceCalibration(
+        calibrated=True,
+        homography=full_calibration.homography,
+        workspace_width_m=full_calibration.workspace_width_m,
+        workspace_height_m=full_calibration.workspace_height_m,
+        table_z_m=0.0,
+        base_origin=BASE_ORIGIN,
+        base_yaw_rad=BASE_YAW_RAD,
+        robot_transform_configured=False,
+    )
+
+    assert planar_only_cal.has_planar_calibration
+    assert not planar_only_cal.has_robot_transform
+    assert not planar_only_cal.is_valid
+
+    # Planar mapping works for all markers
+    for mid, px in centers.items():
+        w_pt = map_pixel_to_workspace(px[0], px[1], planar_only_cal)
+        assert w_pt is not None
+        assert 0.0 <= w_pt[0] <= WORKSPACE_WIDTH_M + 1e-4
+        assert 0.0 <= w_pt[1] <= WORKSPACE_HEIGHT_M + 1e-4
+
+        # Robot-frame base coordinates MUST return None because transform is unverified
+        assert map_pixel_to_base(px[0], px[1], planar_only_cal) is None
 
 
 def test_coordinate_signs_and_orientation(calibrated_setup):

@@ -35,7 +35,15 @@ def command_frame(command: dict[str, Any]) -> str:
     name = command["command"]
     if name in _SIMPLE_FRAMES:
         return _SIMPLE_FRAMES[name] + "\n"
-    if name == "pick":
+    if name in ("pick", "pick_pose"):
+        if "base" in command:
+            base = command.get("base")
+            if isinstance(base, bool) or not isinstance(base, int):
+                raise ValueError("pick base must be an integer")
+            link1 = int(command.get("link1", 500))
+            link2 = int(command.get("link2", 540))
+            gripper = int(command.get("gripper", 435))
+            return f"P,{base},{link1},{link2},{gripper}\n"
         # firmware/pick_slots: "D,<slot>" picks from that slot and drops the
         # object at its fixed drop position; it ends with CYCLE_COMPLETE or
         # CYCLE_ABORTED (see arm_controller_node).

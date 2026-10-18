@@ -45,9 +45,23 @@ class WorkspaceCalibration:
     robot_transform_configured: bool = False
 
     @property
-    def is_valid(self) -> bool:
-        """Return whether this calibration is safe to use for robot poses."""
+    def has_planar_calibration(self) -> bool:
+        """Return whether camera-to-workspace 2D homography is calibrated and valid."""
+        return self.calibrated and self.homography is not None
+
+    @property
+    def has_robot_transform(self) -> bool:
+        """Return whether 3D robot transform (including table_z and base frame) is verified."""
         return self.calibrated and self.robot_transform_configured
+
+    @property
+    def is_valid(self) -> bool:
+        """Return whether this calibration is safe to use for full robot poses.
+
+        Requires both valid planar calibration and verified 3D robot transform.
+        For planar camera-to-workspace queries, check `has_planar_calibration`.
+        """
+        return self.has_robot_transform
 
 
 def object_contact_pixel(
@@ -57,10 +71,18 @@ def object_contact_pixel(
 ) -> tuple[float, float]:
     """Estimate tabletop contact point from bounding-box center and height.
 
-    For an overhead or angled workspace camera viewing objects on a tabletop,
-    the bottom edge of the 2D bounding box (center_y + bbox_height / 2)
-    corresponds to the ground-contact footpoint on the table plane where planar
-    homography mapping is geometrically valid.
+    This is a geometric heuristic approximation: for an object resting on a flat
+    horizontal tabletop viewed by an overhead or angled camera, the bottom edge
+    of the 2D bounding box (center_x, center_y + bbox_height / 2) approximates the
+    ground-contact footpoint on the table plane where planar homography mapping is
+    geometrically valid.
+
+    Limitations:
+    - This is an approximation that requires physical validation on real objects.
+    - Shadows, bounding-box margins, non-flat object bases, and perspective effects
+      on tall objects can shift the true contact point away from this estimate.
+    - Visual gaze selection MUST continue to use visual image_center (centroid),
+      while planar tabletop mapping targets this estimated contact footpoint.
     """
     if not (math.isfinite(center_x) and math.isfinite(center_y)):
         return (center_x, center_y)
@@ -89,6 +111,16 @@ def find_marker_homography(
     Associates marker_ids in order: top-left, top-right, bottom-right, bottom-left.
     Rejects missing markers, degenerate geometry, self-intersecting polygons,
     inverted windings, and ill-conditioned or singular homographies.
+
+    Geometric Limitations:
+    Geometric checks (convexity, winding, area, conditioning) reject non-convex,
+    self-intersecting, or reversed-order configurations, but CANNOT distinguish
+    cyclic permutations of marker IDs (e.g. [1, 2, 3, 0], [2, 3, 0, 1], [3, 0, 1, 2]).
+    Cyclic permutations form valid convex polygons with positive clockwise winding,
+    so they are mathematically accepted by this API, but yield a rotated workspace.
+    Therefore, physical marker ID assignment (ID 0 = TL, ID 1 = TR, ID 2 = BR,
+    ID 3 = BL) MUST be visually verified against the camera image before recording
+    a calibration.
     """
     if cv2 is None or np is None:
         return None
@@ -173,12 +205,14 @@ def map_pixel_to_base(
 ) -> tuple[float, float, float] | None:
     """Map a phone pixel through normalized workspace coordinates to base pose.
 
-    The calibration homography maps pixels to normalized workspace coordinates.
-    The normalized point is then scaled into metres and rotated/translated into
-    the robot base frame.
+    Requires both valid planar calibration and verified 3D robot transform
+    (calibration.has_robot_transform == True). If the robot transform is unverified,
+    returns None to ensure uncalibrated 3D poses cannot initiate motion.
     """
+    if not calibration.has_robot_transform:
+        return None
     workspace = map_pixel_to_workspace(pixel_x, pixel_y, calibration)
-    if workspace is None or not calibration.is_valid:
+    if workspace is None:
         return None
     workspace_x, workspace_y = workspace
     cosine = math.cos(calibration.base_yaw_rad)
@@ -195,8 +229,12 @@ def map_pixel_to_workspace(
     pixel_y: float,
     calibration: WorkspaceCalibration,
 ) -> tuple[float, float] | None:
-    """Map a phone pixel to workspace-local metres."""
-    if not calibration.is_valid or not all(
+    """Map a phone pixel to workspace-local metres.
+
+    Only requires valid planar calibration (calibration.has_planar_calibration == True).
+    Independent of whether the 3D robot transform is verified.
+    """
+    if not calibration.has_planar_calibration or not all(
         math.isfinite(value) for value in (pixel_x, pixel_y)
     ):
         return None

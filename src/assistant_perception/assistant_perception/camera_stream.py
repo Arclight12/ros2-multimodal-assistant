@@ -35,6 +35,9 @@ def open_mjpeg_stream(
     builds without the parameters constructor overload this falls back to the
     two-argument call. Returns an opened capture, or ``None`` on failure.
     """
+    import os
+
+    os.environ["OPENCV_FFMPEG_LOGLEVEL"] = "-8"
     timeout_params = [
         cv2.CAP_PROP_OPEN_TIMEOUT_MSEC,
         int(open_timeout_ms),
@@ -48,6 +51,10 @@ def open_mjpeg_stream(
     if not capture.isOpened():
         capture.release()
         return None
+    try:
+        capture.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+    except Exception:
+        pass
     return capture
 
 

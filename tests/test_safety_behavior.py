@@ -98,8 +98,49 @@ def test_uncalibrated_detections_receive_no_robot_pose():
         robot_transform_configured=False,
     )
     assert not uncalibrated.is_valid
+    assert not uncalibrated.has_planar_calibration
+    assert not uncalibrated.has_robot_transform
     assert map_pixel_to_workspace(200.0, 200.0, uncalibrated) is None
     assert map_pixel_to_base(200.0, 200.0, uncalibrated) is None
+
+
+def test_unverified_robot_transform_disables_grasp_motion():
+    """Valid planar calibration without verified robot transform disables grasp motion."""
+    dummy_h = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+
+    planar_only = WorkspaceCalibration(
+        calibrated=True,
+        homography=dummy_h,
+        workspace_width_m=0.3115,
+        workspace_height_m=0.1500,
+        table_z_m=0.0,
+        base_origin=(-0.150, 0.132, 0.0),
+        base_yaw_rad=0.0,
+        robot_transform_configured=False,
+    )
+    assert planar_only.has_planar_calibration
+    assert not planar_only.has_robot_transform
+    assert not planar_only.is_valid
+
+    # Planar mapping succeeds:
+    assert map_pixel_to_workspace(0.5, 0.5, planar_only) is not None
+    # Robot pose mapping MUST fail:
+    assert map_pixel_to_base(0.5, 0.5, planar_only) is None
+
+    # Motion safety gate: robot pose missing/invalid blocks real grasp
+    safety_state = GraspSafetyState(
+        mock_mode=False,
+        workspace_calibrated=False,  # Unverified robot transform means workspace is not motion-calibrated
+        stable_selection=True,
+        target_pose_valid=False,     # No valid robot pose can be derived
+        target_in_workspace=True,
+        target_reachable=False,
+        hardware_available=True,
+        motion_enabled=True,
+    )
+    decision = validate_real_grasp(safety_state)
+    assert not decision.allowed
+    assert "workspace calibration" in decision.reason
 
 
 def test_no_serial_port_opened_in_tests(monkeypatch):

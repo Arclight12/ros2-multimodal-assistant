@@ -171,17 +171,17 @@ def test_degenerate_geometry_rejection():
 
 
 def test_id_ordering_mistakes_rejected():
-    """Permuted IDs (e.g. crossing diagonals or inverted windings) must not be accepted."""
+    """Permuted IDs with broken geometry (crossing diagonals or inverted windings) are rejected."""
     centers = {
         0: (100.0, 100.0),  # TL
         1: (500.0, 100.0),  # TR
         2: (500.0, 300.0),  # BR
         3: (100.0, 300.0),  # BL
     }
-    # Crossed order: [0, 2, 1, 3] forms a self-intersecting bowtie polygon
+    # Crossed order: [0, 2, 1, 3] forms a self-intersecting bowtie polygon (non-convex)
     assert find_marker_homography(centers, [0, 2, 1, 3]) is None
 
-    # Swapped adjacent corners: [1, 0, 2, 3] (swapped TL and TR)
+    # Swapped adjacent corners: [1, 0, 2, 3] (swapped TL and TR -> inverted winding)
     assert find_marker_homography(centers, [1, 0, 2, 3]) is None
 
     # Inverted winding: [3, 2, 1, 0] (counter-clockwise instead of clockwise in image coords)
@@ -189,3 +189,59 @@ def test_id_ordering_mistakes_rejected():
 
     # Duplicate IDs: [0, 1, 2, 0]
     assert find_marker_homography(centers, [0, 1, 2, 0]) is None
+
+
+def test_cyclic_marker_id_permutations_behavior_and_limitations():
+    """Document and test that cyclic ID permutations are accepted by 2D geometry checks.
+
+    CRITICAL LIMITATION OF 2D HOMOGRAPHY GEOMETRY CHECKS:
+    A cyclic shift of 4 vertices (e.g. [1, 2, 3, 0], [2, 3, 0, 1], [3, 0, 1, 2]):
+    - Preserves polygon convexity (isContourConvex remains True).
+    - Preserves clockwise winding (polygon_signed_area remains positive).
+    - Preserves non-zero area and well-conditioned matrix math.
+
+    Consequently, pure 2D geometric checks CANNOT determine whether Marker 0 is
+    actually at Top-Left or rotated to another corner. The current API mathematically
+    ACCEPTS cyclic permutations, but maps the workspace rotated by 90, 180, or 270 degrees.
+
+    Therefore:
+    1. A convex polygon and valid homography DO NOT prove that physical marker IDs
+       correspond to the correct physical board corners.
+    2. The operator MUST visually verify against a real camera frame that:
+       - Marker ID 0 is physically at Top-Left
+       - Marker ID 1 is physically at Top-Right
+       - Marker ID 2 is physically at Bottom-Right
+       - Marker ID 3 is physically at Bottom-Left
+       before recording a physical calibration.
+    """
+    centers = {
+        0: (100.0, 100.0),  # physical TL
+        1: (500.0, 100.0),  # physical TR
+        2: (500.0, 300.0),  # physical BR
+        3: (100.0, 300.0),  # physical BL
+    }
+
+    # Cyclic shift 1: [1, 2, 3, 0] (90 deg CCW rotation of ID sequence)
+    # The API accepts this because TR->BR->BL->TL is still a convex clockwise quadrilateral
+    h_rot90 = find_marker_homography(centers, [1, 2, 3, 0])
+    assert h_rot90 is not None, "Cyclic permutation [1, 2, 3, 0] is geometrically valid and accepted"
+    # But physical TR (marker 1) was erroneously mapped to normalized TL (0.0, 1.0)!
+    proj_tr = _project_points(h_rot90, [centers[1]])[0]
+    assert pytest.approx(0.0, abs=1e-3) == proj_tr[0]
+    assert pytest.approx(1.0, abs=1e-3) == proj_tr[1]
+
+    # Cyclic shift 2: [2, 3, 0, 1] (180 deg rotation)
+    h_rot180 = find_marker_homography(centers, [2, 3, 0, 1])
+    assert h_rot180 is not None, "Cyclic permutation [2, 3, 0, 1] is geometrically valid and accepted"
+    # Physical BR (marker 2) was erroneously mapped to normalized TL (0.0, 1.0)!
+    proj_br = _project_points(h_rot180, [centers[2]])[0]
+    assert pytest.approx(0.0, abs=1e-3) == proj_br[0]
+    assert pytest.approx(1.0, abs=1e-3) == proj_br[1]
+
+    # Cyclic shift 3: [3, 0, 1, 2] (270 deg rotation)
+    h_rot270 = find_marker_homography(centers, [3, 0, 1, 2])
+    assert h_rot270 is not None, "Cyclic permutation [3, 0, 1, 2] is geometrically valid and accepted"
+    # Physical BL (marker 3) was erroneously mapped to normalized TL (0.0, 1.0)!
+    proj_bl = _project_points(h_rot270, [centers[3]])[0]
+    assert pytest.approx(0.0, abs=1e-3) == proj_bl[0]
+    assert pytest.approx(1.0, abs=1e-3) == proj_bl[1]

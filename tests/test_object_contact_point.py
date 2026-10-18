@@ -1,8 +1,12 @@
 """Tests for object ground-contact point estimation and gaze/grasp coordinate separation.
 
-Covers Phase 5E:
-- Test planar object pixel against contact-point footpoint policy
-- Keep gaze-selection image coordinates separate from grasp coordinates
+CRITICAL NOTE ON CONTACT-POINT APPROXIMATION:
+`object_contact_pixel()` computes (center_x, center_y + bbox_height / 2) as an
+idealized tabletop footpoint heuristic.
+- This is a geometric approximation that requires physical validation on real objects.
+- Unit tests verify the mathematical calculation and the architectural separation
+  between gaze selection (visual centroid) and planar grasp footpoint (tabletop contact).
+- These tests DO NOT prove actual contact-point accuracy on physical hardware.
 """
 
 from __future__ import annotations
@@ -25,7 +29,10 @@ from assistant_perception.workspace_mapping import (
 
 
 def test_object_contact_pixel_estimation():
-    """Verify ground-contact footpoint calculation from bounding box center and height."""
+    """Verify ground-contact footpoint mathematical calculation from bounding box center and height.
+
+    Note: This confirms the mathematical heuristic, not physical real-world accuracy.
+    """
     # Cup with height 80 px: center=(300, 200), bottom footpoint=(300, 240)
     contact = object_contact_pixel(300.0, 200.0, 80.0)
     assert contact == (300.0, 240.0)

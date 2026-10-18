@@ -15,6 +15,13 @@
 # Workspace local frame:
 #   Origin (0.0, 0.0) at Bottom-Left marker center (ID 3).
 #   base_origin = (-0.150, 0.132, 0.0) m, base_yaw = 0.0 rad.
+#
+# NOTE ON ROBOT TRANSFORM VALIDITY:
+# Planar camera-to-workspace calibration (homography) can be calibrated and tested independently.
+# However, table_z_m and base_origin_z_m remain nominal unverified values (0.0 m).
+# Therefore, robot_transform_configured is set to FALSE so that robot-frame 3D target
+# poses remain unavailable and real grasp execution stays disabled until the 3D
+# transform and vertical height are physically measured and verified on the hardware.
 
 workspace_mapper_node:
   ros__parameters:
@@ -31,9 +38,10 @@ calibration_node:
     base_origin_y_m: 0.132
     base_origin_z_m: 0.0
     base_yaw_rad: 0.0
-    robot_transform_configured: true
+    robot_transform_configured: false
 
 motion_planner_node:
   ros__parameters:
     workspace_width_m: 0.3115
     workspace_height_m: 0.1500
+

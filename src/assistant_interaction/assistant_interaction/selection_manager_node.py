@@ -27,7 +27,7 @@ class SelectionManagerNode(Node):
         self.declare_parameter("minimum_gaze_confidence", 0.8)
         self.declare_parameter("maximum_gaze_object_distance", 0.2)
         # Equal to the detector threshold so every drawn box can be selected.
-        self.declare_parameter("minimum_detection_confidence", 0.55)
+        self.declare_parameter("minimum_detection_confidence", 0.10)
         self.declare_parameter("selection_grace_seconds", 0.5)
         self.declare_parameter("voice_priority_seconds", 5.0)
         self._config = SelectionConfig(

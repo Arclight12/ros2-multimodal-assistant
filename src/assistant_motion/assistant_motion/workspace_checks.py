@@ -21,8 +21,10 @@ BASE_CLAMP_MARGIN_DEG = 5.0
 
 # Used when robot.yaml has no channel_limits entry: the firmware's own range.
 DEFAULT_CHANNEL_LIMITS = {
-    channel: {"min": PULSE_MIN, "max": PULSE_MAX, "center": PULSE_CENTER}
-    for channel in CHANNELS
+    0: {"min": 230, "max": 440, "center": 330},
+    1: {"min": 390, "max": 510, "center": 430},
+    2: {"min": 400, "max": 550, "center": 400},
+    3: {"min": 300, "max": 480, "center": 300},
 }
 
 _LIMIT_FIELDS = ("min", "max", "center")
@@ -101,6 +103,30 @@ def clamp_command(
     their pulses are bounded by reach, exactly as the firmware constrains it).
     Returns the command and a note per channel that had to move.
     """
+    if command.get("command") in ("pick", "pick_pose") and "base" in command:
+        clamped = dict(command)
+        notes: list[str] = []
+        base, b_moved = clamp_channel(0, command["base"], channel_limits)
+        if b_moved:
+            clamped["base"] = base
+            notes.append(f"ch0 base {command['base']} -> {base}")
+        if "link1" in command:
+            l1, l1_moved = clamp_channel(1, command["link1"], channel_limits)
+            if l1_moved:
+                clamped["link1"] = l1
+                notes.append(f"ch1 link1 {command['link1']} -> {l1}")
+        if "link2" in command:
+            l2, l2_moved = clamp_channel(2, command["link2"], channel_limits)
+            if l2_moved:
+                clamped["link2"] = l2
+                notes.append(f"ch2 link2 {command['link2']} -> {l2}")
+        if "gripper" in command:
+            g, g_moved = clamp_channel(3, command["gripper"], channel_limits)
+            if g_moved:
+                clamped["gripper"] = g
+                notes.append(f"ch3 gripper {command['gripper']} -> {g}")
+        return clamped, notes
+
     if command.get("command") != "move_to":
         return command, []
     try:

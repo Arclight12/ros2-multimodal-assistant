@@ -14,6 +14,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -37,7 +38,10 @@ def generate_launch_description() -> LaunchDescription:
         )
     }
 
-    def node(package, executable, name, parameters, overrides=None):
+    def node(package, executable, name, parameters, overrides=None, condition=None):
+        kwargs = {}
+        if condition is not None:
+            kwargs["condition"] = condition
         return Node(
             package=package,
             executable=executable,
@@ -53,17 +57,29 @@ def generate_launch_description() -> LaunchDescription:
                 }
             ]
             + (overrides or []),
+            **kwargs,
         )
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("mock_mode", default_value="true"),
-            DeclareLaunchArgument("workspace_camera_url", default_value=""),
-            DeclareLaunchArgument("voice_stream_url", default_value=""),
+            DeclareLaunchArgument("mock_mode", default_value="false"),
+            DeclareLaunchArgument(
+                "workspace_camera_url",
+                default_value="http://192.168.1.2:8080/video",
+            ),
+            DeclareLaunchArgument(
+                "voice_stream_url",
+                default_value="http://192.168.1.2:8080/audio.wav",
+            ),
+            DeclareLaunchArgument(
+                "enable_gaze",
+                default_value="false",
+                description="Enable webcam-based gaze tracking",
+            ),
             DeclareLaunchArgument("gaze_camera_index", default_value="0"),
             DeclareLaunchArgument("gaze_camera_device", default_value=""),
             DeclareLaunchArgument("gaze_camera_backend", default_value="auto"),
-            DeclareLaunchArgument("auto_pick", default_value="false"),
+            DeclareLaunchArgument("auto_pick", default_value="true"),
             node(
                 "assistant_perception",
                 "workspace_camera_node",
@@ -111,12 +127,14 @@ def generate_launch_description() -> LaunchDescription:
                         ),
                     }
                 ],
+                condition=IfCondition(LaunchConfiguration("enable_gaze")),
             ),
             node(
                 "assistant_interaction",
                 "gaze_estimation_node",
                 "gaze_estimation_node",
                 ["gaze.yaml"],
+                condition=IfCondition(LaunchConfiguration("enable_gaze")),
             ),
             node(
                 "assistant_interaction",

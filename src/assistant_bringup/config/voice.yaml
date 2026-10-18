@@ -4,7 +4,7 @@
 # See docs/voice.md.
 voice_node:
   ros__parameters:
-    voice_stream_url: ""
+    voice_stream_url: "http://192.168.1.2:8080/audio.wav"
     nvidia_server: "grpc.nvcf.nvidia.com:443"
     # nemotron-asr-streaming (English, streaming-only). Another model's id comes
     # from its build.nvidia.com "API" page, but offline-only models need a

@@ -58,7 +58,8 @@ def test_workspace_yaml_dimensions_and_units():
     assert pytest.approx(0.132, abs=1e-4) == oy
     assert pytest.approx(0.0, abs=1e-4) == oz
     assert pytest.approx(0.0, abs=1e-4) == yaw
-    assert calib_params["robot_transform_configured"] is True
+    # 3D robot transform must remain False in workspace.yaml until table_z is physically verified
+    assert calib_params["robot_transform_configured"] is False
 
 
 def test_perception_yaml_marker_configuration():
@@ -73,7 +74,7 @@ def test_perception_yaml_marker_configuration():
 
 
 def test_transform_requires_explicit_configuration():
-    """Verify that a calibration cannot be considered valid without explicit configuration."""
+    """Verify planar calibration can be tested independently while robot poses require explicit transform."""
     dummy_h = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
 
     # Default robot_transform_configured should be False
@@ -87,9 +88,14 @@ def test_transform_requires_explicit_configuration():
         base_yaw_rad=0.0,
     )
     assert not calib_default.robot_transform_configured
+    assert calib_default.has_planar_calibration
+    assert not calib_default.has_robot_transform
     assert not calib_default.is_valid
 
-    # When robot_transform_configured is explicitly False
+    # When robot_transform_configured is explicitly False:
+    # Planar mapping works, but robot-frame mapping returns None!
+    from assistant_perception.workspace_mapping import map_pixel_to_base, map_pixel_to_workspace
+
     calib_unconfigured = WorkspaceCalibration(
         calibrated=True,
         homography=dummy_h,
@@ -100,9 +106,20 @@ def test_transform_requires_explicit_configuration():
         base_yaw_rad=0.0,
         robot_transform_configured=False,
     )
+    assert calib_unconfigured.has_planar_calibration
+    assert not calib_unconfigured.has_robot_transform
     assert not calib_unconfigured.is_valid
 
-    # When calibrated is False
+    # Inside normalized range [0..1] x [0..1] with identity homography: pixel (0.5, 0.5)
+    w_pt = map_pixel_to_workspace(0.5, 0.5, calib_unconfigured)
+    assert w_pt is not None
+    assert pytest.approx(0.5 * 0.3115, abs=1e-4) == w_pt[0]
+    assert pytest.approx(0.5 * 0.1500, abs=1e-4) == w_pt[1]
+
+    # But robot-base mapping MUST be refused because transform is unverified
+    assert map_pixel_to_base(0.5, 0.5, calib_unconfigured) is None
+
+    # When calibrated is False: neither planar nor robot mapping works
     calib_not_calibrated = WorkspaceCalibration(
         calibrated=False,
         homography=dummy_h,
@@ -113,9 +130,13 @@ def test_transform_requires_explicit_configuration():
         base_yaw_rad=0.0,
         robot_transform_configured=True,
     )
+    assert not calib_not_calibrated.has_planar_calibration
+    assert not calib_not_calibrated.has_robot_transform
     assert not calib_not_calibrated.is_valid
+    assert map_pixel_to_workspace(0.5, 0.5, calib_not_calibrated) is None
+    assert map_pixel_to_base(0.5, 0.5, calib_not_calibrated) is None
 
-    # Only valid when both are True
+    # Only when both calibrated AND robot_transform_configured are True is robot transform valid
     calib_valid = WorkspaceCalibration(
         calibrated=True,
         homography=dummy_h,
@@ -126,4 +147,7 @@ def test_transform_requires_explicit_configuration():
         base_yaw_rad=0.0,
         robot_transform_configured=True,
     )
+    assert calib_valid.has_planar_calibration
+    assert calib_valid.has_robot_transform
     assert calib_valid.is_valid
+    assert map_pixel_to_base(0.5, 0.5, calib_valid) is not None

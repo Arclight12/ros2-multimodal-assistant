@@ -12,7 +12,7 @@ workspace_camera_node:
   ros__parameters:
     # camera_url comes from the workspace_camera_url launch argument; a value here would override it.
     camera_frame_id: "workspace_camera"
-    camera_fps: 10.0
+    camera_fps: 5.0
     # FFMPEG open/read timeouts keep a dead stream from blocking the node.
     camera_open_timeout_ms: 5000
     camera_read_timeout_ms: 10000

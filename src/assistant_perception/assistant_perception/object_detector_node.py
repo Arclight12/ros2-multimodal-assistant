@@ -22,11 +22,18 @@ except ImportError:  # pragma: no cover - optional runtime dependency
 
 try:
     from ultralytics import YOLO
-except ImportError:  # pragma: no cover - optional runtime dependency
-    YOLO = None
+except ImportError:
+    import sys
+    _venv_site = Path.home() / "robot-venv" / "lib" / "python3.12" / "site-packages"
+    if _venv_site.is_dir() and str(_venv_site) not in sys.path:
+        sys.path.append(str(_venv_site))
+    try:
+        from ultralytics import YOLO
+    except ImportError:  # pragma: no cover - optional runtime dependency
+        YOLO = None
 
 
-DARK_MEAN = 70.0
+DARK_MEAN = 40.0
 BRIGHT_MEAN = 215.0
 TARGET_MEAN = 110.0
 
@@ -47,13 +54,14 @@ class ObjectDetectorNode(Node):
         )
         self._max_detections = int(self.get_parameter("max_detections").value)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
+        self._busy = False
         self._publisher = self.create_publisher(
             DetectedObjectArray, "/object_detections_raw", 10
         )
         self._bridge = CvBridge() if CvBridge is not None else None
         self._model = self._load_model()
         self._subscription = self.create_subscription(
-            Image, "/workspace/image_raw", self._on_image, 10
+            Image, "/workspace/image_raw", self._on_image, 1
         )
         self._timer = None
         if self._mock_mode:
@@ -69,13 +77,18 @@ class ObjectDetectorNode(Node):
                 "Ultralytics is unavailable; object inference is disabled."
             )
             return None
-        if not self._model_path or not Path(self._model_path).is_file():
+        path = Path(self._model_path).expanduser() if self._model_path else None
+        if path is not None and not path.is_file():
+            repo_candidate = Path(__file__).resolve().parents[3] / self._model_path
+            if repo_candidate.is_file():
+                path = repo_candidate
+        if path is None or not path.is_file():
             self.get_logger().error(
                 f"Object model not found at {self._model_path!r}; inference disabled."
             )
             return None
         try:
-            return YOLO(self._model_path)
+            return YOLO(str(path))
         except Exception as exc:  # noqa: BLE001 - optional model boundary
             self.get_logger().error(f"Failed to load object model: {exc}")
             return None
@@ -108,6 +121,9 @@ class ObjectDetectorNode(Node):
         """Run the optional detector on one camera frame."""
         if self._mock_mode or self._model is None or self._bridge is None:
             return
+        if self._busy:
+            return
+        self._busy = True
         try:
             frame = self._check_exposure(
                 self._bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
@@ -121,6 +137,8 @@ class ObjectDetectorNode(Node):
             self._publish_results(message, results[0])
         except Exception as exc:  # noqa: BLE001 - third-party inference boundary
             self.get_logger().error(f"Object inference failed: {exc}")
+        finally:
+            self._busy = False
 
     def _check_exposure(self, frame):
         """Warn about unusable lighting and brighten dim frames before inference."""

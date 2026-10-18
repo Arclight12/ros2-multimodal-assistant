@@ -5,6 +5,13 @@ from __future__ import annotations
 import re
 
 DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
+    "sharpener": ("sharpener", "pencil sharpener", "cutter", "softener", "shop nor", "shopner", "sharpner"),
+
+    "eraser": ("eraser", "rubber"),
+    "thermocol": ("thermocol", "foam", "white block", "thermocol block"),
+    "block_a": ("block a", "cube a", "box a", "letter a", "item a", "object a"),
+    "block_b": ("block b", "cube b", "box b", "letter b", "item b", "object b", "b"),
+    "block_c": ("block c", "cube c", "box c", "letter c", "item c", "object c", "c"),
     "cup": ("cup", "mug"),
     "water_bottle": ("water bottle", "bottle"),
     "book": ("book",),
@@ -12,8 +19,8 @@ DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
     "phone": ("phone", "mobile", "cell phone"),
     "ball": ("ball",),
     "toy": ("toy",),
-    "eraser": ("eraser", "rubber"),
 }
+
 
 
 def match_class(

@@ -9,10 +9,25 @@ from pathlib import Path
 
 import rclpy
 from rclpy.node import Node
+from sensor_msgs.msg import Image
 from std_msgs.msg import String
 
 from assistant_msgs.msg import DetectedObject, DetectedObjectArray
 from assistant_msgs.srv import ScanWorkspace
+
+try:
+    import cv2
+    import cv2.aruco as aruco
+    import numpy as np
+except ImportError:
+    cv2 = None
+    aruco = None
+    np = None
+
+try:
+    from cv_bridge import CvBridge
+except ImportError:
+    CvBridge = None
 
 from .workspace_mapping import (
     load_calibration,
@@ -33,6 +48,8 @@ class WorkspaceMapperNode(Node):
         )
         self.declare_parameter("base_frame", "base_link")
         self.declare_parameter("mock_mode", True)
+        self.declare_parameter("workspace_width_m", 0.3115)
+        self.declare_parameter("workspace_height_m", 0.1500)
         self._calibration_path = os.path.expanduser(
             str(self.get_parameter("calibration_path").value)
         )
@@ -41,8 +58,18 @@ class WorkspaceMapperNode(Node):
         )
         self._base_frame = str(self.get_parameter("base_frame").value)
         self._mock_mode = bool(self.get_parameter("mock_mode").value)
+        self._workspace_width = float(self.get_parameter("workspace_width_m").value)
+        self._workspace_height = float(self.get_parameter("workspace_height_m").value)
         self._last_array: DetectedObjectArray | None = None
         self._warned_uncalibrated = False
+        self._homography_logged = False
+        self._live_homography: Any = None
+        self._bridge = CvBridge() if CvBridge is not None else None
+        self._aruco_dict = (
+            aruco.getPredefinedDictionary(aruco.DICT_4X4_50)
+            if aruco is not None
+            else None
+        )
         self._publisher = self.create_publisher(
             DetectedObjectArray, "/object_detections", 10
         )
@@ -53,24 +80,94 @@ class WorkspaceMapperNode(Node):
             self._on_raw_detections,
             10,
         )
+        self._image_subscription = self.create_subscription(
+            Image,
+            "/workspace/image_raw",
+            self._on_image,
+            1,
+        )
         self._scan_service = self.create_service(
             ScanWorkspace, "/scan_workspace", self._scan_workspace_callback
         )
 
+    def _on_image(self, message: Image) -> None:
+        """Track ArUco markers on the live frame to maintain an active homography."""
+        if self._mock_mode or self._bridge is None or aruco is None:
+            return
+        try:
+            frame = self._bridge.imgmsg_to_cv2(message, desired_encoding="bgr8")
+            corners, ids, _ = aruco.detectMarkers(frame, self._aruco_dict)
+            if ids is None or len(ids) == 0:
+                return
+            id_map = {
+                int(mid): tuple(c[0].mean(axis=0))
+                for mid, c in zip(ids.flatten(), corners)
+            }
+            found = set(id_map.keys()).intersection({0, 1, 2, 3})
+            src_pts = None
+            if len(found) == 4:
+                src_pts = np.array(
+                    [id_map[0], id_map[1], id_map[2], id_map[3]], dtype=np.float32
+                )
+            elif len(found) == 3:
+                p = {k: np.array(id_map[k], dtype=np.float32) for k in found}
+                if 2 not in found and {0, 1, 3}.issubset(found):
+                    p[2] = p[1] + p[3] - p[0]
+                elif 1 not in found and {0, 2, 3}.issubset(found):
+                    p[1] = p[0] + p[2] - p[3]
+                elif 3 not in found and {0, 1, 2}.issubset(found):
+                    p[3] = p[0] + p[2] - p[1]
+                elif 0 not in found and {1, 2, 3}.issubset(found):
+                    p[0] = p[1] + p[3] - p[2]
+                if len(p) == 4:
+                    src_pts = np.array([p[0], p[1], p[2], p[3]], dtype=np.float32)
+
+            if src_pts is not None:
+                dst_pts = np.array(
+                    [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]],
+                    dtype=np.float32,
+                )
+                self._live_homography = cv2.getPerspectiveTransform(src_pts, dst_pts)
+                if not self._homography_logged:
+                    self._homography_logged = True
+                    self.get_logger().info(
+                        f"Active dynamic ArUco homography established from {len(found)} markers."
+                    )
+        except Exception:
+            pass
+
     def _on_raw_detections(self, raw: DetectedObjectArray) -> None:
         """Map and republish one live detector frame."""
-        # Calibration must remain invalid in mock mode
         calibration = (
             None if self._mock_mode else load_calibration(self._calibration_path)
         )
+        has_planar = (self._live_homography is not None) or (
+            calibration is not None and calibration.has_planar_calibration
+        )
+        has_robot = calibration is not None and calibration.has_robot_transform
+
         mapped = DetectedObjectArray()
         mapped.header = raw.header
         mapped.image_width = raw.image_width
         mapped.image_height = raw.image_height
-        mapped.calibrated = calibration is not None and calibration.is_valid
+        mapped.calibrated = has_planar
         for raw_object in raw.objects:
             mapped_object = self._copy_object(raw_object)
-            if calibration is not None and calibration.is_valid:
+            if self._live_homography is not None:
+                p = np.array(
+                    [raw_object.image_center.x, raw_object.image_center.y, 1.0],
+                    dtype=np.float32,
+                )
+                p_norm = self._live_homography @ p
+                if abs(p_norm[2]) > 1e-12:
+                    p_norm /= p_norm[2]
+                    nx, ny = float(p_norm[0]), float(p_norm[1])
+                    if -0.15 <= nx <= 1.15 and -0.15 <= ny <= 1.15:
+                        mapped_object.workspace_center.x = nx * self._workspace_width
+                        mapped_object.workspace_center.y = ny * self._workspace_height
+                        mapped_object.workspace_center.z = 0.0
+                        mapped_object.has_workspace_pose = True
+            elif has_planar and calibration is not None:
                 contact_x, contact_y = object_contact_pixel(
                     raw_object.image_center.x,
                     raw_object.image_center.y,
@@ -81,28 +178,36 @@ class WorkspaceMapperNode(Node):
                     contact_y,
                     calibration,
                 )
-                robot = map_pixel_to_base(
-                    contact_x,
-                    contact_y,
-                    calibration,
-                )
-                if workspace is not None and robot is not None:
+                if workspace is not None:
                     mapped_object.workspace_center.x = workspace[0]
                     mapped_object.workspace_center.y = workspace[1]
-                    mapped_object.robot_pose.position.x = robot[0]
-                    mapped_object.robot_pose.position.y = robot[1]
-                    mapped_object.robot_pose.position.z = robot[2]
-                    mapped_object.robot_pose.orientation.w = 1.0
+                    mapped_object.workspace_center.z = 0.0
                     mapped_object.has_workspace_pose = True
-                    mapped_object.has_robot_pose = True
-                    mapped_object.header.frame_id = self._base_frame
+
+                if has_robot:
+                    robot = map_pixel_to_base(
+                        contact_x,
+                        contact_y,
+                        calibration,
+                    )
+                    if robot is not None:
+                        mapped_object.robot_pose.position.x = robot[0]
+                        mapped_object.robot_pose.position.y = robot[1]
+                        mapped_object.robot_pose.position.z = robot[2]
+                        mapped_object.robot_pose.orientation.w = 1.0
+                        mapped_object.has_robot_pose = True
             mapped.objects.append(mapped_object)
         self._last_array = mapped
         self._publisher.publish(mapped)
-        if not mapped.calibrated and not self._warned_uncalibrated:
+        if not has_planar and not self._warned_uncalibrated:
             self._warned_uncalibrated = True
             self.get_logger().warning(
-                "Workspace calibration is invalid; detections remain image-only."
+                "Workspace planar calibration is invalid; detections remain image-only."
+            )
+        elif has_planar and not has_robot and not self._warned_uncalibrated:
+            self._warned_uncalibrated = True
+            self.get_logger().info(
+                "Planar workspace calibration is active, but robot-base 3D transform is unverified; robot poses remain unavailable."
             )
 
     @staticmethod
