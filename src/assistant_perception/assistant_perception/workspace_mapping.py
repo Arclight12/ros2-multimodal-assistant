@@ -9,6 +9,28 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 
+try:
+    import cv2
+    import numpy as np
+except ImportError:  # pragma: no cover - optional runtime dependency
+    cv2 = None
+    np = None
+
+# Corner order associated with marker IDs (e.g. IDs [0, 1, 2, 3])
+CORNER_ORDER = ("top_left", "top_right", "bottom_right", "bottom_left")
+
+# Destination normalized points:
+# Workspace origin (0.0, 0.0) is at the Bottom-Left marker center.
+# Positive X extends to the right across the board.
+# Positive Y extends toward the far/top end of the board (forward arm workspace).
+DESTINATION_POINTS = (
+    (0.0, 1.0),  # top-left: x=0, y=height
+    (1.0, 1.0),  # top-right: x=width, y=height
+    (1.0, 0.0),  # bottom-right: x=width, y=0
+    (0.0, 0.0),  # bottom-left: x=0, y=0
+)
+
+
 @dataclass(frozen=True)
 class WorkspaceCalibration:
     """Validated planar calibration used by perception and motion checks."""
@@ -20,7 +42,7 @@ class WorkspaceCalibration:
     table_z_m: float
     base_origin: tuple[float, float, float]
     base_yaw_rad: float
-    robot_transform_configured: bool = True
+    robot_transform_configured: bool = False
 
     @property
     def is_valid(self) -> bool:
@@ -28,14 +50,119 @@ class WorkspaceCalibration:
         return self.calibrated and self.robot_transform_configured
 
 
-def workspace_contains(x_m: float, y_m: float, width_m: float, height_m: float) -> bool:
+def object_contact_pixel(
+    center_x: float,
+    center_y: float,
+    bbox_height: float,
+) -> tuple[float, float]:
+    """Estimate tabletop contact point from bounding-box center and height.
+
+    For an overhead or angled workspace camera viewing objects on a tabletop,
+    the bottom edge of the 2D bounding box (center_y + bbox_height / 2)
+    corresponds to the ground-contact footpoint on the table plane where planar
+    homography mapping is geometrically valid.
+    """
+    if not (math.isfinite(center_x) and math.isfinite(center_y)):
+        return (center_x, center_y)
+    effective_h = max(0.0, bbox_height) if math.isfinite(bbox_height) else 0.0
+    return (center_x, center_y + effective_h / 2.0)
+
+
+def polygon_signed_area(pts: Sequence[Sequence[float]]) -> float:
+    """Return 2D signed area using the shoelace formula."""
+    n = len(pts)
+    if n < 3:
+        return 0.0
+    area = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        area += pts[i][0] * pts[j][1] - pts[j][0] * pts[i][1]
+    return 0.5 * area
+
+
+def find_marker_homography(
+    marker_centers: Mapping[int, Sequence[float]],
+    marker_ids: Sequence[int] = (0, 1, 2, 3),
+) -> tuple[tuple[float, float, float], ...] | None:
+    """Compute and validate pixel-to-normalized-workspace homography from marker centers.
+
+    Associates marker_ids in order: top-left, top-right, bottom-right, bottom-left.
+    Rejects missing markers, degenerate geometry, self-intersecting polygons,
+    inverted windings, and ill-conditioned or singular homographies.
+    """
+    if cv2 is None or np is None:
+        return None
+    if len(marker_ids) != 4 or len(set(marker_ids)) != 4:
+        return None
+    if any(m_id not in marker_centers for m_id in marker_ids):
+        return None
+    try:
+        source_pts = [
+            (float(marker_centers[m_id][0]), float(marker_centers[m_id][1]))
+            for m_id in marker_ids
+        ]
+    except (IndexError, TypeError, ValueError):
+        return None
+    if not all(math.isfinite(x) and math.isfinite(y) for x, y in source_pts):
+        return None
+
+    source = np.float32(source_pts)
+    destination = np.float32(DESTINATION_POINTS)
+
+    # Geometry checks: minimum area and convexity
+    if cv2.contourArea(source) < 100.0:
+        return None
+    if not cv2.isContourConvex(np.int32(source)):
+        return None
+
+    # Winding check: in image coordinates (y down), TL -> TR -> BR -> BL
+    # must have positive signed area in this shoelace orientation.
+    signed_area = polygon_signed_area(source_pts)
+    if signed_area <= 0.0:
+        return None
+
+    homography, _ = cv2.findHomography(source, destination)
+    if homography is None or homography.shape != (3, 3):
+        return None
+    if not np.isfinite(homography).all():
+        return None
+
+    det = float(np.linalg.det(homography))
+    if abs(det) < 1e-12:
+        return None
+    try:
+        cond = float(np.linalg.cond(homography))
+        if not math.isfinite(cond) or cond > 1e8:
+            return None
+    except np.linalg.LinAlgError:
+        return None
+
+    # Forward projection consistency check
+    src_h = np.column_stack([source, np.ones(4)])
+    dst_proj = (homography @ src_h.T).T
+    if any(abs(w) < 1e-12 for w in dst_proj[:, 2]):
+        return None
+    dst_calc = dst_proj[:, :2] / dst_proj[:, 2:3]
+    if not np.allclose(dst_calc, destination, atol=1e-3):
+        return None
+
+    return tuple(tuple(float(v) for v in row) for row in homography)
+
+
+def workspace_contains(
+    x_m: float,
+    y_m: float,
+    width_m: float,
+    height_m: float,
+    tolerance_m: float = 1e-6,
+) -> bool:
     """Return whether a workspace-local point lies inside its rectangle."""
     return (
         all(math.isfinite(value) for value in (x_m, y_m, width_m, height_m))
         and width_m > 0.0
         and height_m > 0.0
-        and 0.0 <= x_m <= width_m
-        and 0.0 <= y_m <= height_m
+        and -tolerance_m <= x_m <= width_m + tolerance_m
+        and -tolerance_m <= y_m <= height_m + tolerance_m
     )
 
 
@@ -82,11 +209,13 @@ def map_pixel_to_workspace(
         normalized_y = (row1[0] * pixel_x + row1[1] * pixel_y + row1[2]) / denominator
     except (TypeError, ValueError):
         return None
-    if not workspace_contains(normalized_x, normalized_y, 1.0, 1.0):
+    if not workspace_contains(normalized_x, normalized_y, 1.0, 1.0, tolerance_m=1e-5):
         return None
+    clamped_x = min(max(normalized_x, 0.0), 1.0)
+    clamped_y = min(max(normalized_y, 0.0), 1.0)
     return (
-        normalized_x * calibration.workspace_width_m,
-        normalized_y * calibration.workspace_height_m,
+        clamped_x * calibration.workspace_width_m,
+        clamped_y * calibration.workspace_height_m,
     )
 
 
@@ -117,6 +246,13 @@ def calibration_from_document(
     homography = _matrix(document.get("homography"))
     transform = document.get("workspace_to_base")
     if homography is None or not isinstance(transform, Mapping):
+        return None
+    det = (
+        homography[0][0] * (homography[1][1] * homography[2][2] - homography[1][2] * homography[2][1])
+        - homography[0][1] * (homography[1][0] * homography[2][2] - homography[1][2] * homography[2][0])
+        + homography[0][2] * (homography[1][0] * homography[2][1] - homography[1][1] * homography[2][0])
+    )
+    if not math.isfinite(det) or abs(det) < 1e-12:
         return None
     try:
         width = float(document["workspace_width_m"])

@@ -18,6 +18,7 @@ from .workspace_mapping import (
     load_calibration,
     map_pixel_to_base,
     map_pixel_to_workspace,
+    object_contact_pixel,
 )
 
 
@@ -58,7 +59,10 @@ class WorkspaceMapperNode(Node):
 
     def _on_raw_detections(self, raw: DetectedObjectArray) -> None:
         """Map and republish one live detector frame."""
-        calibration = load_calibration(self._calibration_path)
+        # Calibration must remain invalid in mock mode
+        calibration = (
+            None if self._mock_mode else load_calibration(self._calibration_path)
+        )
         mapped = DetectedObjectArray()
         mapped.header = raw.header
         mapped.image_width = raw.image_width
@@ -67,14 +71,19 @@ class WorkspaceMapperNode(Node):
         for raw_object in raw.objects:
             mapped_object = self._copy_object(raw_object)
             if calibration is not None and calibration.is_valid:
-                workspace = map_pixel_to_workspace(
+                contact_x, contact_y = object_contact_pixel(
                     raw_object.image_center.x,
                     raw_object.image_center.y,
+                    raw_object.bbox_height,
+                )
+                workspace = map_pixel_to_workspace(
+                    contact_x,
+                    contact_y,
                     calibration,
                 )
                 robot = map_pixel_to_base(
-                    raw_object.image_center.x,
-                    raw_object.image_center.y,
+                    contact_x,
+                    contact_y,
                     calibration,
                 )
                 if workspace is not None and robot is not None:

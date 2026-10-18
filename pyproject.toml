@@ -5,3 +5,12 @@ extend-exclude = ["imagenet-loc", "datasets"]
 [tool.ruff.lint]
 select = ["E", "F", "I", "W"]
 per-file-ignores = { "**/setup.py" = ["E501"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [
+    "src/assistant_perception",
+    "src/assistant_interaction",
+    "src/assistant_motion",
+]
+

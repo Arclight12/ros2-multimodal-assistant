@@ -28,8 +28,8 @@ class MotionPlannerNode(Node):
         super().__init__("motion_planner_node")
         self.declare_parameter("mock_mode", True)
         self.declare_parameter("motion_enabled", False)
-        self.declare_parameter("workspace_width_m", 0.4)
-        self.declare_parameter("workspace_height_m", 0.3)
+        self.declare_parameter("workspace_width_m", 0.3115)
+        self.declare_parameter("workspace_height_m", 0.1500)
         self.declare_parameter("detection_timeout_seconds", 1.0)
         self.declare_parameter("arm_command_timeout_s", 30.0)
         # Must not be wider than the firmware's calibrated grid.

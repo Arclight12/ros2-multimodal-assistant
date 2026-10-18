@@ -69,3 +69,8 @@ rosbag2_*/
 .cache/
 colcon_ws_*/
 /captures/
+
+# --- Runtime calibration and scene maps ---
+*calibration*.json
+object_map.json
+

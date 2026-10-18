@@ -1,21 +1,39 @@
+# Tabletop workspace calibration and coordinate mapping configuration.
+# Physical board: ~0.45 m x 0.35 m.
+# ArUco marker centers (DICT_4X4_50, IDs [0, 1, 2, 3]) measured relative to robot base rotation axis:
+#   ID 0 -> Top-Left:     (-0.150, 0.282) m
+#   ID 1 -> Top-Right:    ( 0.163, 0.283) m
+#   ID 2 -> Bottom-Right: ( 0.160, 0.133) m
+#   ID 3 -> Bottom-Left:  (-0.150, 0.132) m
+# Center-to-center measured span:
+#   width  = 0.3115 m
+#   height = 0.1500 m
+# Robot base frame convention:
+#   X positive to the right across the board.
+#   Y positive toward the far/top end of the board (forward arm reach).
+#   Z perpendicular to the board (table_z_m unverified, keep 0.0 nominal).
+# Workspace local frame:
+#   Origin (0.0, 0.0) at Bottom-Left marker center (ID 3).
+#   base_origin = (-0.150, 0.132, 0.0) m, base_yaw = 0.0 rad.
+
 workspace_mapper_node:
   ros__parameters:
-    workspace_width_m: 0.4
-    workspace_height_m: 0.3
+    workspace_width_m: 0.3115
+    workspace_height_m: 0.1500
     table_z_m: 0.0
 
 calibration_node:
   ros__parameters:
-    workspace_width_m: 0.4
-    workspace_height_m: 0.3
+    workspace_width_m: 0.3115
+    workspace_height_m: 0.1500
     table_z_m: 0.0
-    base_origin_x_m: 0.0
-    base_origin_y_m: 0.0
+    base_origin_x_m: -0.150
+    base_origin_y_m: 0.132
     base_origin_z_m: 0.0
     base_yaw_rad: 0.0
-    robot_transform_configured: false
+    robot_transform_configured: true
 
 motion_planner_node:
   ros__parameters:
-    workspace_width_m: 0.4
-    workspace_height_m: 0.3
+    workspace_width_m: 0.3115
+    workspace_height_m: 0.1500

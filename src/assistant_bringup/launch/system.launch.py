@@ -29,7 +29,7 @@ def generate_launch_description() -> LaunchDescription:
         )
     }
 
-    def node(package, executable, name, parameters, overrides=None):
+    def node(package, executable, name, parameters, overrides=None, mock_mode_arg="mock_mode"):
         return Node(
             package=package,
             executable=executable,
@@ -40,7 +40,7 @@ def generate_launch_description() -> LaunchDescription:
             + [
                 {
                     "mock_mode": ParameterValue(
-                        LaunchConfiguration("mock_mode"), value_type=bool
+                        LaunchConfiguration(mock_mode_arg), value_type=bool
                     )
                 }
             ]
@@ -50,6 +50,11 @@ def generate_launch_description() -> LaunchDescription:
     return LaunchDescription(
         [
             DeclareLaunchArgument("mock_mode", default_value="true"),
+            DeclareLaunchArgument(
+                "arm_mock_mode",
+                default_value="true",
+                description="Keep arm in mock mode during camera/calibration testing",
+            ),
             DeclareLaunchArgument("workspace_camera_url", default_value=""),
             DeclareLaunchArgument("voice_stream_url", default_value=""),
             DeclareLaunchArgument("gaze_camera_index", default_value="0"),
@@ -145,6 +150,7 @@ def generate_launch_description() -> LaunchDescription:
                 "arm_controller_node",
                 "arm_controller_node",
                 ["robot.yaml"],
+                mock_mode_arg="arm_mock_mode",
             ),
         ]
     )

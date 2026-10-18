@@ -10,7 +10,11 @@ from sensor_msgs.msg import Image
 
 from assistant_msgs.srv import CalibrateWorkspace
 
-from .workspace_mapping import WorkspaceCalibration, save_calibration
+from .workspace_mapping import (
+    WorkspaceCalibration,
+    find_marker_homography,
+    save_calibration,
+)
 
 try:
     import cv2
@@ -31,11 +35,11 @@ class CalibrationNode(Node):
     def __init__(self) -> None:
         super().__init__("calibration_node")
         self.declare_parameter("calibration_path", "")
-        self.declare_parameter("workspace_width_m", 0.4)
-        self.declare_parameter("workspace_height_m", 0.3)
+        self.declare_parameter("workspace_width_m", 0.3115)
+        self.declare_parameter("workspace_height_m", 0.1500)
         self.declare_parameter("table_z_m", 0.0)
-        self.declare_parameter("base_origin_x_m", 0.0)
-        self.declare_parameter("base_origin_y_m", 0.0)
+        self.declare_parameter("base_origin_x_m", -0.150)
+        self.declare_parameter("base_origin_y_m", 0.132)
         self.declare_parameter("base_origin_z_m", 0.0)
         self.declare_parameter("base_yaw_rad", 0.0)
         self.declare_parameter("robot_transform_configured", False)
@@ -109,18 +113,19 @@ class CalibrationNode(Node):
         except Exception as exc:  # noqa: BLE001 - camera boundary
             return self._refuse(response, f"marker detection failed: {exc}")
         if homography is None:
-            return self._refuse(response, "all configured ArUco markers were not found")
+            return self._refuse(
+                response,
+                "all configured ArUco markers were not found or geometry was invalid",
+            )
         calibration = WorkspaceCalibration(
             calibrated=True,
-            homography=tuple(
-                tuple(float(value) for value in row) for row in homography
-            ),
+            homography=homography,
             workspace_width_m=self._width,
             workspace_height_m=self._height,
             table_z_m=self._table_z,
             base_origin=self._origin,
             base_yaw_rad=self._yaw,
-            robot_transform_configured=True,
+            robot_transform_configured=self._transform_configured,
         )
         try:
             save_calibration(self._path, calibration)
@@ -147,13 +152,8 @@ class CalibrationNode(Node):
             return None
         centers = {}
         for marker_corners, marker_id in zip(corners, ids.flatten()):
-            centers[int(marker_id)] = marker_corners[0].mean(axis=0)
-        if any(marker_id not in centers for marker_id in self._marker_ids):
-            return None
-        source = np.float32([centers[marker_id] for marker_id in self._marker_ids])
-        destination = np.float32([[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]])
-        homography, _ = cv2.findHomography(source, destination)
-        return homography
+            centers[int(marker_id)] = tuple(marker_corners[0].mean(axis=0))
+        return find_marker_homography(centers, self._marker_ids)
 
     @staticmethod
     def _refuse(response, message):

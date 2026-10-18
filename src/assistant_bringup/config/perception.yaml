@@ -15,4 +15,6 @@ calibration_node:
   ros__parameters:
     calibration_path: "~/.ros/ros2_multimodal_assistant/workspace_calibration.json"
     aruco_dictionary: "DICT_4X4_50"
+    # Corner order: [top_left, top_right, bottom_right, bottom_left]
+    # Physical markers: ID 0=Top-Left, ID 1=Top-Right, ID 2=Bottom-Right, ID 3=Bottom-Left
     marker_ids: [0, 1, 2, 3]
