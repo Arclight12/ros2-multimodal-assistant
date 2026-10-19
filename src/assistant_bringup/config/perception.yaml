@@ -1,7 +1,7 @@
 object_detector_node:
   ros__parameters:
     object_model_path: "models/object_detection/object_detector.pt"
-    object_detection_confidence: 0.15
+    object_detection_confidence: 0.10
     max_detections: 20
     mock_detection_fps: 5.0
 

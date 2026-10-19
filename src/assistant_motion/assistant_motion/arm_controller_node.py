@@ -180,6 +180,12 @@ class ArmControllerNode(Node):
         elif line == "ERR,bad_calibration":
             self.get_logger().error("Arduino refused its calibration; arm disabled.")
             self._status = "unavailable"
+        elif line == "ERR,pca9685_not_found":
+            self.get_logger().error(
+                "PCA9685 servo driver board not detected on I2C (0x40)! "
+                "Check PCA9685 power supply and wiring: VCC (5V), GND, SDA (A4), SCL (A5)."
+            )
+            self._status = "unavailable"
         elif line.startswith("ERR"):
             self.get_logger().error(f"Arduino reported: {line}")
             if self._pending:

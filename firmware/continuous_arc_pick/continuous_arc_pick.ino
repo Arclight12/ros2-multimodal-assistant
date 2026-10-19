@@ -322,22 +322,43 @@ void runCycle(uint8_t slot) {
 
 // --------------------------------------------------
 // Arduino setup
+bool pcaReady = false;
+
+bool initPCA9685() {
+  Wire.beginTransmission(0x40);
+  byte err = Wire.endTransmission();
+  if (err != 0) {
+    Serial.print(F("ERR,pca9685_not_found,err="));
+    Serial.println(err);
+    return false;
+  }
+  pwm.begin();
+  pwm.setPWMFreq(50);
+  delay(300);
+
+  for (int ch = 0; ch < 4; ch++) {
+    currentPulse[ch] = HOME[ch];
+    setServoPulse(ch, HOME[ch]);
+  }
+  return true;
+}
+
+// --------------------------------------------------
+// Arduino setup
 // --------------------------------------------------
 void setup() {
   Serial.begin(115200);
   Wire.begin();
+  Wire.setWireTimeout(25000, true);
 
-  pwm.begin();
-  pwm.setPWMFreq(50);
-  delay(500);
-
-  for (int ch = 0; ch < 4; ch++) {
-    setServoPulse(ch, HOME[ch]);
+  if (initPCA9685()) {
+    pcaReady = true;
+    Serial.println(F("ARM_READY"));
+  } else {
+    pcaReady = false;
+    Serial.println(F("ERR,pca9685_not_found"));
   }
 
-  delay(1000);
-
-  Serial.println(F("ARM_READY"));
   Serial.println(F("Commands:"));
   Serial.println(F("H            - Go home"));
   Serial.println(F("O            - Open gripper"));
@@ -353,6 +374,20 @@ void setup() {
 // Serial command handling
 // --------------------------------------------------
 void loop() {
+  if (!pcaReady) {
+    static unsigned long lastCheck = 0;
+    if (millis() - lastCheck > 2000) {
+      lastCheck = millis();
+      if (initPCA9685()) {
+        pcaReady = true;
+        Serial.println(F("ARM_READY"));
+      } else {
+        Serial.println(F("ERR,pca9685_not_found"));
+      }
+    }
+    return;
+  }
+
   if (!Serial.available()) return;
 
   String command = Serial.readStringUntil('\n');

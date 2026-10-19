@@ -43,8 +43,9 @@ python3 scripts/check_cameras.py \
   --workspace-url http://PHONE:8080/video --gaze-index 0
 ```
 
-See [docs/setup.md](docs/setup.md) and [docs/calibration.md](docs/calibration.md).
+See [docs/setup.md](docs/setup.md), [docs/calibration.md](docs/calibration.md), and [docs/troubleshooting.md](docs/troubleshooting.md).
 Voice input is documented in [docs/voice.md](docs/voice.md).
+Full detect & pick pipeline launcher and live monitor: [scripts/run_pipeline.sh](scripts/run_pipeline.sh).
 
 ## Training
 

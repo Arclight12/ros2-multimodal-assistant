@@ -129,7 +129,7 @@ class PickTriggerNode(Node):
                 }
             except ValueError as exc:
                 self.get_logger().warning(
-                    f"Continuous kinematics rejected target '{class_name}': {exc}"
+                    f"Continuous kinematics rejected target '{class_name}': {exc}; falling back to slot {label}"
                 )
 
         if cmd_payload is None:

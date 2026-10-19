@@ -10,7 +10,7 @@ DEFAULT_ALIASES: dict[str, tuple[str, ...]] = {
     "eraser": ("eraser", "rubber"),
     "thermocol": ("thermocol", "foam", "white block", "thermocol block"),
     "block_a": ("block a", "cube a", "box a", "letter a", "item a", "object a", "ay", "eh"),
-    "block_b": ("block b", "cube b", "box b", "letter b", "item b", "object b", "b", "be", "bee"),
+    "block_b": ("block b", "cube b", "box b", "letter b", "item b", "object b", "objective", "b", "be", "bee"),
     "block_c": ("block c", "cube c", "box c", "letter c", "item c", "object c", "c", "see", "sea", "si"),
     "cup": ("cup", "mug"),
     "water_bottle": ("water bottle", "bottle"),

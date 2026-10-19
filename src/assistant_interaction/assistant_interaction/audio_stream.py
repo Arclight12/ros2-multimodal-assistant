@@ -135,10 +135,10 @@ class Segmenter:
         """Add one 16 kHz mono chunk; return finished utterance PCM, else None."""
         samples = np.frombuffer(chunk, dtype="<i2").astype(np.float64)
         rms = float(np.sqrt(np.mean(samples**2))) if len(samples) else 0.0
-        loud = rms > max(self._min_rms, 3.0 * self._noise)
         if not self._speech:
+            self._noise = 0.95 * self._noise + 0.05 * rms
+            loud = rms > max(self._min_rms, 2.5 * self._noise)
             if not loud:
-                self._noise = 0.95 * self._noise + 0.05 * rms
                 self._quiet = (self._quiet + [chunk])[-self._preroll :]
                 return None
             self._lead = len(self._quiet)
@@ -146,6 +146,7 @@ class Segmenter:
             self._quiet = []
             self._silent = 0
             return None
+        loud = rms > max(self._min_rms, 1.5 * self._noise)
         self._speech.append(chunk)
         self._silent = 0 if loud else self._silent + 1
         if self._silent < self._end and len(self._speech) < self._max:
