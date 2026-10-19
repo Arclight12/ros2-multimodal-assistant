@@ -20,8 +20,11 @@ This guide documents the root causes, diagnostic steps, and solutions for the re
 We provide a unified runner script [`scripts/run_pipeline.sh`](../scripts/run_pipeline.sh):
 
 ```bash
-# Terminal 1: Launch full pipeline (Voice + Vision + Serial Arm Controller)
+# Terminal 1: Launch full pipeline (default IP: 192.168.1.2)
 ./scripts/run_pipeline.sh
+
+# If using a different phone or Wi-Fi network, pass the new phone IP:
+./scripts/run_pipeline.sh 192.168.1.50
 
 # Terminal 2: Monitor live object detections in real-time
 ./scripts/run_pipeline.sh monitor
@@ -164,6 +167,51 @@ ros2 launch assistant_bringup detect_pick.launch.py \
     ```bash
     ros2 topic echo /object_detections
     ```
+
+### Issue 3: Using a Different Phone or Wi-Fi Network (Changing the IP Address)
+When switching to a different phone or connecting to a new Wi-Fi router / hotspot, the phone will be assigned a different IP address (e.g., `192.168.1.50`, `192.168.43.123`, etc.).
+
+1. **Find the New Phone IP**:
+   - Open the **IP Webcam** app on the Android phone.
+   - Tap **Start server** at the bottom of the main menu.
+   - The phone's live view will show the active URL at the bottom of the screen (e.g., `http://192.168.1.50:8080`).
+
+2. **Verify Network Connectivity**:
+   - Make sure your workstation / Pi is connected to the same Wi-Fi network (or connected to the phone's personal hotspot).
+   - Test connectivity from the terminal:
+     ```bash
+     ping 192.168.1.50
+     ```
+   - If ping times out, check if "Client Isolation" or "AP Isolation" is enabled on your Wi-Fi router, or switch to using the phone's mobile hotspot directly.
+
+3. **Verify Audio is Enabled in the App**:
+   - In IP Webcam settings, ensure **Audio stream** is enabled and set to **WAV** (or default PCM). The voice node reads from `http://<phone_ip>:8080/audio.wav`. If audio is disabled, the voice node will report connection errors.
+
+4. **Launch with the New IP**:
+   - **Method A: Pass the IP directly to the runner script**:
+     ```bash
+     ./scripts/run_pipeline.sh 192.168.1.50
+     ```
+   - **Method B: Set via environment variable**:
+     ```bash
+     PHONE_IP=192.168.1.50 ./scripts/run_pipeline.sh
+     ```
+   - **Method C: Manual ROS 2 launch**:
+     ```bash
+     ros2 launch assistant_bringup detect_pick.launch.py \
+       workspace_camera_url:=http://192.168.1.50:8080/video \
+       voice_stream_url:=http://192.168.1.50:8080/audio.wav \
+       auto_pick:=true mock_mode:=false
+     ```
+
+5. **Test Streams Before Launching**:
+   ```bash
+   # Test video feed
+   python3 scripts/check_cameras.py --workspace-url http://192.168.1.50:8080/video
+
+   # Test audio stream and Riva speech recognition
+   python3 scripts/test_voice_pick.py --url http://192.168.1.50:8080/audio.wav
+   ```
 
 ---
 
