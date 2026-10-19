@@ -127,6 +127,7 @@ class ArmControllerNode(Node):
             self._publish_done(command_id, ok=False)
             return
         self._pending.append(command_id)
+        self.get_logger().info(f"Sending serial command to arm: {frame.strip()!r}")
         self._serial.write(frame.encode("ascii"))
 
     def _poll(self) -> None:
@@ -162,6 +163,9 @@ class ArmControllerNode(Node):
 
     def _handle_line(self, line: str) -> None:
         """React to one Arduino reply line."""
+        if not line:
+            return
+        self.get_logger().info(f"Arduino replied: {line}")
         if line in ("READY", "ARM_READY"):
             self._status = "available"
             self.get_logger().info("Arm hardware is ready.")
