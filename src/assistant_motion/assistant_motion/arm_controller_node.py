@@ -117,6 +117,7 @@ class ArmControllerNode(Node):
             # answers ERR,stopped instead. So a stop is acknowledged here and
             # must not join the queue of commands waiting for a reply.
             self._serial.write(frame.encode("ascii"))
+            self._serial.flush()
             self._publish_done(command_id, ok=True)
             return
         if self._pending:
@@ -129,6 +130,7 @@ class ArmControllerNode(Node):
         self._pending.append(command_id)
         self.get_logger().info(f"Sending serial command to arm: {frame.strip()!r}")
         self._serial.write(frame.encode("ascii"))
+        self._serial.flush()
 
     def _poll(self) -> None:
         """Read Arduino replies and watch for the boot handshake."""
