@@ -21,9 +21,14 @@ def test_match_thermocol():
 
 def test_match_blocks():
     assert match_class("please pick block a") == "block_a"
+    assert match_class("pick the object a") == "block_a"
     assert match_class("grab cube b") == "block_b"
+    assert match_class("pick the object b") == "block_b"
     assert match_class("give me letter c") == "block_c"
     assert match_class("pick c") == "block_c"
+    assert match_class("pick the object c") == "block_c"
+    assert match_class("pick the object see") == "block_c"
+
 
 
 def test_no_false_positive_on_article_a():

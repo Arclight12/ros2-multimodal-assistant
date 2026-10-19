@@ -54,6 +54,7 @@ class PickTriggerNode(Node):
         self._pending_id: int | None = None
         self._release_at: float | None = None
         self._last_status: str | None = None
+        self._queued_selection: tuple[ObjectSelection, float] | None = None
         self._label_publisher = self.create_publisher(Int32, "/object_label", 10)
         self._command_publisher = self.create_publisher(String, "/arm/command", 10)
         self.create_subscription(
@@ -86,6 +87,11 @@ class PickTriggerNode(Node):
                 self.get_logger().warning(
                     f"Selected '{class_name}' has no slot; pick_classes is "
                     f"{self._pick_classes}."
+                )
+            elif self._gate.busy:
+                self._queued_selection = (message, time.monotonic())
+                self.get_logger().info(
+                    f"Arm busy with active move: buffered selection for '{class_name}' to execute when finished."
                 )
             return
         self.get_logger().info(
@@ -179,16 +185,28 @@ class PickTriggerNode(Node):
             )
 
     def _check_timeout(self) -> None:
-        """Release a pick that never got an /arm/done (arm idle or lost reply)."""
-        if self._release_at is None or not self._gate.busy:
-            return
+        """Release a pick that timed out, and process queued picks when arm is ready."""
         now = time.monotonic()
-        if now < self._release_at:
+        if self._release_at is not None and self._gate.busy:
+            if now >= self._release_at:
+                self.get_logger().warning(
+                    f"No /arm/done within {self._command_timeout:.0f}s; releasing the picker."
+                )
+                self._release_pick(now)
             return
-        self.get_logger().warning(
-            f"No /arm/done within {self._command_timeout:.0f}s; releasing the picker."
-        )
-        self._release_pick(now)
+
+        if self._queued_selection is not None and not self._gate.busy:
+            queued_msg, queued_at = self._queued_selection
+            # Check if within 10-second lifetime and arm ready
+            if now - queued_at <= 10.0:
+                if now >= self._gate._ready_at:
+                    self._queued_selection = None
+                    self.get_logger().info(
+                        f"Arm ready: executing buffered pick for '{queued_msg.class_name}'"
+                    )
+                    self._on_selection(queued_msg)
+            else:
+                self._queued_selection = None
 
     def _release_pick(self, now: float) -> None:
         """End the current pick and wait for the re-arm gap."""

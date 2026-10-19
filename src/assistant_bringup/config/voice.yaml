@@ -15,13 +15,13 @@ voice_node:
     voice_chunk_ms: 100
     # Loudness that counts as speech; raise it in a noisy room.
     voice_min_rms: 500.0
-    voice_end_silence_ms: 600
+    voice_end_silence_ms: 350
     voice_max_utterance_s: 6.0
     voice_reconnect_base_delay_s: 1.0
     voice_reconnect_max_delay_s: 30.0
     # Longer transcripts are ambient speech and are ignored; 0 = off.
     voice_max_words: 8
     # Ignore a repeat of the same class published this many seconds ago; 0 = off.
-    voice_repeat_cooldown_s: 2.0
+    voice_repeat_cooldown_s: 0.5
     # Drop transcripts below this ASR confidence; 0 = off (streaming returns 0.0).
     voice_min_confidence: 0.0
